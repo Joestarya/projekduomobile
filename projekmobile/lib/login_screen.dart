@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'register_screen.dart';
+import 'screens/home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -39,17 +40,25 @@ class _LoginScreenState extends State<LoginScreen> {
         // Login Berhasil -> Simpan Token (Kriteria: Session)
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', data['token']);
+
+        if (!mounted) return;
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Login Berhasil!')),
         );
         
-        // TODO: Navigasi ke halaman utama nanti di sini
+              Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HomeScreen()),
+      );
       } else {
+        if (!mounted) return;
         // Login Gagal
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Gagal login')),
+          
         );
+        
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
