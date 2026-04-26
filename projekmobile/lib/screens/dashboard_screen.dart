@@ -217,7 +217,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           SizedBox(height: 24),
           Text(
-            'Aset Anda',
+            'TOP ASSETS',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           if (_lastUpdatedAt != null)
