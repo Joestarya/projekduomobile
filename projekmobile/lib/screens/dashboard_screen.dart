@@ -14,13 +14,13 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _isPrivacyMode = false;
-  double _totalBalance = 15450000.0; // Saldo dummy, nanti ambil dari database
+  double _totalBalance = 950.0; // Saldo dummy, nanti ambil dari database
   bool _isLoadingPrices = true;
   bool _isFetchingPrices = false;
   String? _priceError;
   String? _lastUpdatedAt;
   Timer? _priceRefreshTimer;
-  final Map<String, double> _assetPricesIdr = {};
+  final Map<String, double> _assetPricesUsd = {};
 
   // 1. Ubah tipe Subscription-nya ke UserAccelerometerEvent
   StreamSubscription<UserAccelerometerEvent>? _accelerometerSubscription;
@@ -74,7 +74,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       if (!mounted) return;
       setState(() {
-        _assetPricesIdr
+        _assetPricesUsd
           ..clear()
           ..addAll(nextPrices);
         _lastUpdatedAt = updatedAt;
@@ -133,13 +133,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-  String _formatIdr(double value) {
-    final whole = value.toStringAsFixed(0);
-    final wholeWithDots = whole.replaceAllMapped(
+  String _formatUsd(double value) {
+    final fixed = value.toStringAsFixed(2);
+    final parts = fixed.split('.');
+    final wholeWithCommas = parts[0].replaceAllMapped(
       RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (_) => '.',
+      (_) => ',',
     );
-    return 'Rp $wholeWithDots';
+    return '\$$wholeWithCommas.${parts[1]}';
   }
 
   String _formatUpdatedTime(String isoTime) {
@@ -188,8 +189,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 SizedBox(height: 10),
                 Text(
                   _isPrivacyMode
-                      ? 'Rp *********'
-                      : 'Rp ${_totalBalance.toStringAsFixed(0)}',
+                      ? '\$*********'
+                      : _formatUsd(_totalBalance),
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 32,
@@ -198,7 +199,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 SizedBox(height: 10),
                 Text(
-                  '+ Rp 1.250.000 (8.5%) Hari Ini',
+                  '+ \$15.30 (1.6%) Today',
                   style: TextStyle(color: Colors.greenAccent, fontSize: 14),
                 ),
                 SizedBox(height: 5),
@@ -253,14 +254,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   'Bitcoin',
                   'BTC',
                   0.015,
-                  _assetPricesIdr['BTCIDR'],
+                  _assetPricesUsd['BTCUSDT'],
                   Colors.orange,
                 ),
                 _buildAssetTile(
                   'Ethereum',
                   'ETH',
                   0.5,
-                  _assetPricesIdr['ETHIDR'],
+                  _assetPricesUsd['ETHUSDT'],
                   Colors.blue,
                 ),
               ],
@@ -276,11 +277,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     String name,
     String symbol,
     double amount,
-    double? priceIdr,
+    double? priceUsd,
     Color iconColor,
   ) {
-    final hasPrice = priceIdr != null;
-    final totalValue = hasPrice ? amount * priceIdr : null;
+    final hasPrice = priceUsd != null;
+    final totalValue = hasPrice ? amount * priceUsd : null;
 
     return Card(
       elevation: 2,
@@ -291,15 +292,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Text(symbol[0], style: TextStyle(color: Colors.white)),
         ),
         title: Text(name, style: TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(hasPrice ? _formatIdr(priceIdr) : 'Harga belum tersedia'),
+        subtitle: Text(hasPrice ? _formatUsd(priceUsd) : 'Harga belum tersedia'),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
               _isPrivacyMode
-                  ? 'Rp *****'
-                  : (totalValue != null ? _formatIdr(totalValue) : 'Rp --'),
+                  ? '\$*****'
+                  : (totalValue != null ? _formatUsd(totalValue) : '\$--'),
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ],

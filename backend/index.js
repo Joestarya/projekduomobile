@@ -142,32 +142,32 @@ async function getPriceFromTokocrypto(marketSymbol) {
 
 app.get('/crypto/prices', async (_req, res) => {
     try {
-        const [btcPriceData, ethPriceData] = await Promise.all([
+        const [btcPriceUsdData, ethPriceUsdData] = await Promise.all([
             getPriceFromTokocrypto('BTC_USDT'),
             getPriceFromTokocrypto('ETH_USDT'),
         ]);
 
         res.json({
             source: 'tokocrypto',
-            quoteAsset: 'IDR',
+            quoteAsset: 'USDT',
             priceMode: TOKOCRYPTO_PRICE_MODE,
             updatedAt: new Date().toISOString(),
             data: [
                 {
                     name: 'Bitcoin',
                     symbol: 'BTC',
-                    pair: 'BTCIDR',
-                    price: btcPriceData.price,
-                    bid: btcPriceData.bid,
-                    ask: btcPriceData.ask,
+                    pair: 'BTCUSDT',
+                    price: btcPriceUsdData.price,
+                    bid: btcPriceUsdData.bid,
+                    ask: btcPriceUsdData.ask,
                 },
                 {
                     name: 'Ethereum',
                     symbol: 'ETH',
-                    pair: 'ETHIDR',
-                    price: ethPriceData.price,
-                    bid: ethPriceData.bid,
-                    ask: ethPriceData.ask,
+                    pair: 'ETHUSDT',
+                    price: ethPriceUsdData.price,
+                    bid: ethPriceUsdData.bid,
+                    ask: ethPriceUsdData.ask,
                 },
             ],
         });
