@@ -70,7 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
 // WIDGET KHUSUS PROFIL & SARAN TPM
 // ==========================================
 class ProfileMenu extends StatelessWidget {
-  const ProfileMenu({Key? key}) : super(key: key);
+  const ProfileMenu({super.key});
 
   Future<void> _logout(BuildContext context) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();

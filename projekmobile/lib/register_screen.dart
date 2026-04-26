@@ -19,7 +19,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     // PENTING: Sama seperti di login, sesuaikan IP Address-nya
-    final String apiUrl = 'http://localhost:3000/register';
+    final String apiUrl = 'http://172.30.156.220:3000/register';
 
     try {
       final response = await http.post(

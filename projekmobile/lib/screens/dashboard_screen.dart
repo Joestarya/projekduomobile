@@ -12,7 +12,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isPrivacyMode = false;
   double _totalBalance = 15450000.0; // Saldo dummy, nanti ambil dari database
   
-  StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
+// 1. Ubah tipe Subscription-nya ke UserAccelerometerEvent
+  StreamSubscription<UserAccelerometerEvent>? _accelerometerSubscription;
+  
+  DateTime _lastShakeTime = DateTime.now(); 
 
   @override
   void initState() {
@@ -21,20 +24,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _startShakeDetection() {
-    _accelerometerSubscription = accelerometerEvents.listen((AccelerometerEvent event) {
-      // Menghitung kekuatan guncangan
+    // 2. Gunakan userAccelerometerEvents (TANPA GRAVITASI BUMI)
+    _accelerometerSubscription = userAccelerometerEvents.listen((UserAccelerometerEvent event) {
+      
+      // Hitung kekuatan gerakan murni dari user
       double gForce = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
       
-      // Jika guncangan melebihi ambang batas (misal 15), aktifkan/matikan Privacy Mode
-      if (gForce > 15) {
-        setState(() {
-          _isPrivacyMode = !_isPrivacyMode;
-        });
-        // Jeda sedikit biar nggak kedap-kedip kalau digoyang terus
-        _accelerometerSubscription?.pause();
-        Future.delayed(Duration(seconds: 2), () {
-          _accelerometerSubscription?.resume();
-        });
+      // 3. Karena gravitasi udah nggak dihitung, angka 12 ini udah lumayan kencang 
+      // (Bisa kamu turunkan ke 10 kalau kurang sensitif, atau naikkan ke 15 kalau masih terlalu sensitif)
+      if (gForce > 12) {
+        DateTime now = DateTime.now();
+        
+        // Sistem Cooldown 1.5 detik (Biarkan ini tetap ada biar nggak panik)
+        if (now.difference(_lastShakeTime).inMilliseconds > 1500) {
+          _lastShakeTime = now; 
+          
+          setState(() {
+            _isPrivacyMode = !_isPrivacyMode; 
+          });
+        }
       }
     });
   }

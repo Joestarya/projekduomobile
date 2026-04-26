@@ -22,8 +22,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     // PENTING: Jika pakai Emulator Android, gunakan 10.0.2.2. 
     // Jika pakai HP asli/Chrome, ganti dengan IP Address Wi-Fi laptopmu.
-    final String apiUrl = 'http://127.0.0.1:3000/login';
-
+    final String apiUrl = 'http://172.30.156.220:3000/login';
+    
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
