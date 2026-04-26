@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'api_config.dart';
 
 class RegisterScreen extends StatefulWidget {
   @override
@@ -18,8 +19,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _isLoading = true;
     });
 
-    // PENTING: Sama seperti di login, sesuaikan IP Address-nya
-    final String apiUrl = 'http://172.30.156.220:3000/register';
+    final String apiUrl = ApiConfig.endpoint('/register');
 
     try {
       final response = await http.post(
@@ -34,12 +34,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       final data = jsonDecode(response.body);
 
+      if (!mounted) return;
+
       if (response.statusCode == 201) {
         // Jika berhasil, munculkan pesan dan kembali ke halaman Login
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Registrasi Berhasil! Silakan Login.')),
         );
-        Navigator.pop(context); 
+        Navigator.pop(context);
       } else {
         // Jika gagal (misal username sudah dipakai)
         ScaffoldMessenger.of(context).showSnackBar(
@@ -47,14 +49,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: Tidak bisa terhubung ke server')),
       );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
