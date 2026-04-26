@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:sensors_plus/sensors_plus.dart';
+import '../api_config.dart';
 
 class DashboardScreen extends StatefulWidget {
   @override
@@ -11,46 +15,140 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _isPrivacyMode = false;
   double _totalBalance = 15450000.0; // Saldo dummy, nanti ambil dari database
-  
-// 1. Ubah tipe Subscription-nya ke UserAccelerometerEvent
+  bool _isLoadingPrices = true;
+  bool _isFetchingPrices = false;
+  String? _priceError;
+  String? _lastUpdatedAt;
+  Timer? _priceRefreshTimer;
+  final Map<String, double> _assetPricesIdr = {};
+
+  // 1. Ubah tipe Subscription-nya ke UserAccelerometerEvent
   StreamSubscription<UserAccelerometerEvent>? _accelerometerSubscription;
-  
-  DateTime _lastShakeTime = DateTime.now(); 
+
+  DateTime _lastShakeTime = DateTime.now();
 
   @override
   void initState() {
     super.initState();
     _startShakeDetection();
+    _fetchCryptoPrices();
+    _priceRefreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _fetchCryptoPrices(showLoader: false);
+    });
+  }
+
+  Future<void> _fetchCryptoPrices({bool showLoader = true}) async {
+    if (_isFetchingPrices) return;
+
+    if (showLoader) {
+      setState(() {
+        _isLoadingPrices = true;
+        _priceError = null;
+      });
+    }
+
+    _isFetchingPrices = true;
+
+    try {
+      final response = await http.get(
+        Uri.parse(ApiConfig.endpoint('/crypto/prices')),
+      );
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+
+      final Map<String, dynamic> jsonMap = jsonDecode(response.body);
+      final List<dynamic> assets = (jsonMap['data'] as List<dynamic>? ?? []);
+      final updatedAt = jsonMap['updatedAt']?.toString();
+
+      final nextPrices = <String, double>{};
+      for (final asset in assets) {
+        if (asset is Map<String, dynamic>) {
+          final pair = asset['pair']?.toString();
+          final price = num.tryParse(asset['price']?.toString() ?? '');
+          if (pair != null && price != null) {
+            nextPrices[pair] = price.toDouble();
+          }
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _assetPricesIdr
+          ..clear()
+          ..addAll(nextPrices);
+        _lastUpdatedAt = updatedAt;
+        _priceError = null;
+        _isLoadingPrices = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _priceError = 'Harga realtime belum tersedia';
+        _isLoadingPrices = false;
+      });
+    } finally {
+      _isFetchingPrices = false;
+    }
   }
 
   void _startShakeDetection() {
+    // Plugin sensors_plus belum tersedia di Linux desktop, jadi dinonaktifkan.
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.iOS)) {
+      return;
+    }
+
     // 2. Gunakan userAccelerometerEvents (TANPA GRAVITASI BUMI)
-    _accelerometerSubscription = userAccelerometerEvents.listen((UserAccelerometerEvent event) {
-      
+    _accelerometerSubscription = userAccelerometerEvents.listen((
+      UserAccelerometerEvent event,
+    ) {
       // Hitung kekuatan gerakan murni dari user
-      double gForce = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
-      
-      // 3. Karena gravitasi udah nggak dihitung, angka 12 ini udah lumayan kencang 
+      double gForce = sqrt(
+        event.x * event.x + event.y * event.y + event.z * event.z,
+      );
+
+      // 3. Karena gravitasi udah nggak dihitung, angka 12 ini udah lumayan kencang
       // (Bisa kamu turunkan ke 10 kalau kurang sensitif, atau naikkan ke 15 kalau masih terlalu sensitif)
       if (gForce > 12) {
         DateTime now = DateTime.now();
-        
+
         // Sistem Cooldown 1.5 detik (Biarkan ini tetap ada biar nggak panik)
         if (now.difference(_lastShakeTime).inMilliseconds > 1500) {
-          _lastShakeTime = now; 
-          
+          _lastShakeTime = now;
+
           setState(() {
-            _isPrivacyMode = !_isPrivacyMode; 
+            _isPrivacyMode = !_isPrivacyMode;
           });
         }
       }
-    });
+    }, onError: (_) {});
   }
 
   @override
   void dispose() {
+    _priceRefreshTimer?.cancel();
     _accelerometerSubscription?.cancel();
     super.dispose();
+  }
+
+  String _formatIdr(double value) {
+    final whole = value.toStringAsFixed(0);
+    final wholeWithDots = whole.replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (_) => '.',
+    );
+    return 'Rp $wholeWithDots';
+  }
+
+  String _formatUpdatedTime(String isoTime) {
+    final dt = DateTime.tryParse(isoTime)?.toLocal();
+    if (dt == null) return '-';
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    final ss = dt.second.toString().padLeft(2, '0');
+    return '$hh:$mm:$ss';
   }
 
   @override
@@ -84,12 +182,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Icon(
                       _isPrivacyMode ? Icons.visibility_off : Icons.visibility,
                       color: Colors.white70,
-                    )
+                    ),
                   ],
                 ),
                 SizedBox(height: 10),
                 Text(
-                  _isPrivacyMode ? 'Rp *********' : 'Rp ${_totalBalance.toStringAsFixed(0)}',
+                  _isPrivacyMode
+                      ? 'Rp *********'
+                      : 'Rp ${_totalBalance.toStringAsFixed(0)}',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 32,
@@ -104,47 +204,103 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 SizedBox(height: 5),
                 Text(
                   '💡 Info: Goyangkan HP untuk menyembunyikan saldo',
-                  style: TextStyle(color: Colors.white54, fontSize: 12, fontStyle: FontStyle.italic),
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
               ],
             ),
           ),
-          
+
           SizedBox(height: 24),
-          Text('Aset Anda', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(
+            'Aset Anda',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          if (_lastUpdatedAt != null)
+            Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                'Update: ${_formatUpdatedTime(_lastUpdatedAt!)}',
+                style: TextStyle(color: Colors.black54, fontSize: 12),
+              ),
+            ),
+          if (_isLoadingPrices)
+            Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Memuat harga realtime...',
+                style: TextStyle(color: Colors.black54),
+              ),
+            )
+          else if (_priceError != null)
+            Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                _priceError!,
+                style: TextStyle(color: Colors.redAccent),
+              ),
+            ),
           SizedBox(height: 10),
-          
-          // LIST ASET (Contoh Statis)
+
+          // LIST ASET dari backend (sumber Tokocrypto)
           Expanded(
             child: ListView(
               children: [
-                _buildAssetTile('Bitcoin', 'BTC', 0.015, 1050000000, Colors.orange),
-                _buildAssetTile('Ethereum', 'ETH', 0.5, 45000000, Colors.blue),
+                _buildAssetTile(
+                  'Bitcoin',
+                  'BTC',
+                  0.015,
+                  _assetPricesIdr['BTCIDR'],
+                  Colors.orange,
+                ),
+                _buildAssetTile(
+                  'Ethereum',
+                  'ETH',
+                  0.5,
+                  _assetPricesIdr['ETHIDR'],
+                  Colors.blue,
+                ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
   }
 
   // Fungsi untuk membuat baris aset
-  Widget _buildAssetTile(String name, String symbol, double amount, double price, Color iconColor) {
-    double totalValue = amount * price;
+  Widget _buildAssetTile(
+    String name,
+    String symbol,
+    double amount,
+    double? priceIdr,
+    Color iconColor,
+  ) {
+    final hasPrice = priceIdr != null;
+    final totalValue = hasPrice ? amount * priceIdr : null;
+
     return Card(
       elevation: 2,
       margin: EdgeInsets.symmetric(vertical: 8),
       child: ListTile(
-        leading: CircleAvatar(backgroundColor: iconColor, child: Text(symbol[0], style: TextStyle(color: Colors.white))),
+        leading: CircleAvatar(
+          backgroundColor: iconColor,
+          child: Text(symbol[0], style: TextStyle(color: Colors.white)),
+        ),
         title: Text(name, style: TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('$amount $symbol'),
+        subtitle: Text(hasPrice ? _formatIdr(priceIdr) : 'Harga belum tersedia'),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              _isPrivacyMode ? 'Rp *****' : 'Rp ${totalValue.toStringAsFixed(0)}', 
-              style: TextStyle(fontWeight: FontWeight.bold)
+              _isPrivacyMode
+                  ? 'Rp *****'
+                  : (totalValue != null ? _formatIdr(totalValue) : 'Rp --'),
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ],
         ),

@@ -2,14 +2,46 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+require('dotenv').config({ override: true });
 const db = require('./db'); // Memanggil koneksi database dari db.js
 
 const app = express();
 app.use(cors()); // Agar bisa diakses dari aplikasi mobile
 app.use(express.json()); // Agar bisa menerima input format JSON
 
-// Secret key untuk JWT (Nantinya baiknya ditaruh di file .env)
-const SECRET_KEY = 'kunci_rahasia_projek_tpm';
+const TOKOCRYPTO_BASE_URL = process.env.TOKOCRYPTO_BASE_URL || 'https://www.tokocrypto.com/open/v1';
+const TOKOCRYPTO_PRICE_MODE = (process.env.TOKOCRYPTO_PRICE_MODE || 'mid').toLowerCase();
+
+function pickPriceByMode(bestBid, bestAsk) {
+    if (TOKOCRYPTO_PRICE_MODE === 'bid' && Number.isFinite(bestBid)) {
+        return bestBid;
+    }
+
+    if (TOKOCRYPTO_PRICE_MODE === 'ask' && Number.isFinite(bestAsk)) {
+        return bestAsk;
+    }
+
+    if (Number.isFinite(bestBid) && Number.isFinite(bestAsk)) {
+        return (bestBid + bestAsk) / 2;
+    }
+
+    if (Number.isFinite(bestBid)) {
+        return bestBid;
+    }
+
+    if (Number.isFinite(bestAsk)) {
+        return bestAsk;
+    }
+
+    return null;
+}
+
+// Secret key untuk JWT diambil dari environment variable
+const SECRET_KEY = process.env.JWT_SECRET;
+
+if (!SECRET_KEY) {
+    throw new Error('JWT_SECRET belum diset. Tambahkan di file .env backend.');
+}
 
 // ==========================================
 // 1. ENDPOINT REGISTER (Mendaftar Akun Baru)
@@ -80,8 +112,75 @@ app.post('/login', (req, res) => {
     });
 });
 
+
+async function getPriceFromTokocrypto(marketSymbol) {
+    const response = await fetch(`${TOKOCRYPTO_BASE_URL}/market/depth?symbol=${marketSymbol}`);
+
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
+
+    const payload = await response.json();
+    if (payload.code !== 0 || !payload.data) {
+        throw new Error(payload.msg || 'Respons Tokocrypto tidak valid');
+    }
+
+    const bestBid = Number(payload.data?.bids?.[0]?.[0]);
+    const bestAsk = Number(payload.data?.asks?.[0]?.[0]);
+    const selectedPrice = pickPriceByMode(bestBid, bestAsk);
+
+    if (Number.isFinite(selectedPrice)) {
+        return {
+            price: selectedPrice,
+            bid: Number.isFinite(bestBid) ? bestBid : null,
+            ask: Number.isFinite(bestAsk) ? bestAsk : null,
+        };
+    }
+
+    throw new Error(`Order book kosong untuk ${marketSymbol}`);
+}
+
+app.get('/crypto/prices', async (_req, res) => {
+    try {
+        const [btcPriceData, ethPriceData] = await Promise.all([
+            getPriceFromTokocrypto('BTC_USDT'),
+            getPriceFromTokocrypto('ETH_USDT'),
+        ]);
+
+        res.json({
+            source: 'tokocrypto',
+            quoteAsset: 'IDR',
+            priceMode: TOKOCRYPTO_PRICE_MODE,
+            updatedAt: new Date().toISOString(),
+            data: [
+                {
+                    name: 'Bitcoin',
+                    symbol: 'BTC',
+                    pair: 'BTCIDR',
+                    price: btcPriceData.price,
+                    bid: btcPriceData.bid,
+                    ask: btcPriceData.ask,
+                },
+                {
+                    name: 'Ethereum',
+                    symbol: 'ETH',
+                    pair: 'ETHIDR',
+                    price: ethPriceData.price,
+                    bid: ethPriceData.bid,
+                    ask: ethPriceData.ask,
+                },
+            ],
+        });
+    } catch (error) {
+        res.status(502).json({
+            message: 'Gagal mengambil data harga dari Tokocrypto.',
+            error: error.message,
+        });
+    }
+});
+
 // Jalankan server di port 3000
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server Backend TPM berjalan di http://0.0.0.0:${PORT}`);
 });
