@@ -9,31 +9,18 @@ const app = express();
 app.use(cors()); // Agar bisa diakses dari aplikasi mobile
 app.use(express.json()); // Agar bisa menerima input format JSON
 
-const TOKOCRYPTO_BASE_URL = process.env.TOKOCRYPTO_BASE_URL || 'https://www.tokocrypto.com/open/v1';
-const TOKOCRYPTO_PRICE_MODE = (process.env.TOKOCRYPTO_PRICE_MODE || 'mid').toLowerCase();
+const DEFAULT_BINANCE_BASE_URLS = [
+    'https://api.binance.com/api/v3/ticker/price',
+    'https://data-api.binance.vision/api/v3/ticker/price',
+];
 
-function pickPriceByMode(bestBid, bestAsk) {
-    if (TOKOCRYPTO_PRICE_MODE === 'bid' && Number.isFinite(bestBid)) {
-        return bestBid;
-    }
+const BINANCE_BASE_URLS = (process.env.BINANCE_BASE_URLS || '')
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean);
 
-    if (TOKOCRYPTO_PRICE_MODE === 'ask' && Number.isFinite(bestAsk)) {
-        return bestAsk;
-    }
-
-    if (Number.isFinite(bestBid) && Number.isFinite(bestAsk)) {
-        return (bestBid + bestAsk) / 2;
-    }
-
-    if (Number.isFinite(bestBid)) {
-        return bestBid;
-    }
-
-    if (Number.isFinite(bestAsk)) {
-        return bestAsk;
-    }
-
-    return null;
+if (BINANCE_BASE_URLS.length === 0) {
+    BINANCE_BASE_URLS.push(...DEFAULT_BINANCE_BASE_URLS);
 }
 
 // Secret key untuk JWT diambil dari environment variable
@@ -113,67 +100,62 @@ app.post('/login', (req, res) => {
 });
 
 
-async function getPriceFromTokocrypto(marketSymbol) {
-    const response = await fetch(`${TOKOCRYPTO_BASE_URL}/market/depth?symbol=${marketSymbol}`);
+async function getPriceFromBinance(symbol) {
+    let lastError = null;
 
-    if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+    for (const baseUrl of BINANCE_BASE_URLS) {
+        try {
+            const response = await fetch(`${baseUrl}?symbol=${symbol}`);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            const price = Number(data.price);
+
+            if (!Number.isFinite(price)) {
+                throw new Error('Data harga tidak valid');
+            }
+
+            return price;
+        } catch (error) {
+            lastError = `${baseUrl} -> ${error.message}`;
+        }
     }
 
-    const payload = await response.json();
-    if (payload.code !== 0 || !payload.data) {
-        throw new Error(payload.msg || 'Respons Tokocrypto tidak valid');
-    }
-
-    const bestBid = Number(payload.data?.bids?.[0]?.[0]);
-    const bestAsk = Number(payload.data?.asks?.[0]?.[0]);
-    const selectedPrice = pickPriceByMode(bestBid, bestAsk);
-
-    if (Number.isFinite(selectedPrice)) {
-        return {
-            price: selectedPrice,
-            bid: Number.isFinite(bestBid) ? bestBid : null,
-            ask: Number.isFinite(bestAsk) ? bestAsk : null,
-        };
-    }
-
-    throw new Error(`Order book kosong untuk ${marketSymbol}`);
+    throw new Error(`Semua endpoint Binance gagal untuk ${symbol}. ${lastError || ''}`.trim());
 }
 
 app.get('/crypto/prices', async (_req, res) => {
     try {
-        const [btcPriceUsdData, ethPriceUsdData] = await Promise.all([
-            getPriceFromTokocrypto('BTC_USDT'),
-            getPriceFromTokocrypto('ETH_USDT'),
+        const [btcPriceUsd, ethPriceUsd] = await Promise.all([
+            getPriceFromBinance('BTCUSDT'),
+            getPriceFromBinance('ETHUSDT'),
         ]);
 
         res.json({
-            source: 'tokocrypto',
+            source: 'binance',
             quoteAsset: 'USDT',
-            priceMode: TOKOCRYPTO_PRICE_MODE,
             updatedAt: new Date().toISOString(),
             data: [
                 {
                     name: 'Bitcoin',
                     symbol: 'BTC',
                     pair: 'BTCUSDT',
-                    price: btcPriceUsdData.price,
-                    bid: btcPriceUsdData.bid,
-                    ask: btcPriceUsdData.ask,
+                    price: btcPriceUsd,
                 },
                 {
                     name: 'Ethereum',
                     symbol: 'ETH',
                     pair: 'ETHUSDT',
-                    price: ethPriceUsdData.price,
-                    bid: ethPriceUsdData.bid,
-                    ask: ethPriceUsdData.ask,
+                    price: ethPriceUsd,
                 },
             ],
         });
     } catch (error) {
         res.status(502).json({
-            message: 'Gagal mengambil data harga dari Tokocrypto.',
+            message: 'Gagal mengambil data harga dari Binance.',
             error: error.message,
         });
     }
