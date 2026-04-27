@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:sensors_plus/sensors_plus.dart';
-import '../api_config.dart';
+import '../service/api_config.dart';
 
 class DashboardScreen extends StatefulWidget {
   @override
@@ -13,10 +13,13 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  static const Duration _priceRefreshInterval = Duration(seconds: 1);
+
   bool _isPrivacyMode = false;
   double _totalBalance = 950.0; // Saldo dummy, nanti ambil dari database
   bool _isLoadingPrices = true;
   bool _isFetchingPrices = false;
+  bool _hasPendingPriceFetch = false;
   String? _priceError;
   String? _lastUpdatedAt;
   Timer? _priceRefreshTimer;
@@ -31,14 +34,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _startShakeDetection();
-    _fetchCryptoPrices();
-    _priceRefreshTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _fetchCryptoPrices(showLoader: false);
+    _requestPriceFetch(showLoader: true);
+    _priceRefreshTimer = Timer.periodic(_priceRefreshInterval, (_) {
+      _requestPriceFetch(showLoader: false);
     });
   }
 
+  void _requestPriceFetch({required bool showLoader}) {
+    if (_isFetchingPrices) {
+      _hasPendingPriceFetch = true;
+      return;
+    }
+    _fetchCryptoPrices(showLoader: showLoader);
+  }
+
   Future<void> _fetchCryptoPrices({bool showLoader = true}) async {
-    if (_isFetchingPrices) return;
+    _isFetchingPrices = true;
 
     if (showLoader) {
       setState(() {
@@ -46,8 +57,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _priceError = null;
       });
     }
-
-    _isFetchingPrices = true;
 
     try {
       final response = await http.get(
@@ -89,6 +98,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
     } finally {
       _isFetchingPrices = false;
+
+      if (_hasPendingPriceFetch) {
+        _hasPendingPriceFetch = false;
+        _requestPriceFetch(showLoader: false);
+      }
     }
   }
 
@@ -152,6 +166,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return '$hh:$mm:$ss';
   }
 
+  void _togglePrivacyMode() {
+    setState(() {
+      _isPrivacyMode = !_isPrivacyMode;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -180,17 +200,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       'Total Portofolio',
                       style: TextStyle(color: Colors.white70, fontSize: 16),
                     ),
-                    Icon(
-                      _isPrivacyMode ? Icons.visibility_off : Icons.visibility,
-                      color: Colors.white70,
+                    IconButton(
+                      tooltip: _isPrivacyMode
+                          ? 'Tampilkan saldo'
+                          : 'Sembunyikan saldo',
+                      onPressed: _togglePrivacyMode,
+                      icon: Icon(
+                        _isPrivacyMode
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        color: Colors.white70,
+                      ),
                     ),
                   ],
                 ),
                 SizedBox(height: 10),
                 Text(
-                  _isPrivacyMode
-                      ? '\$*********'
-                      : _formatUsd(_totalBalance),
+                  _isPrivacyMode ? '\$*********' : _formatUsd(_totalBalance),
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 32,
@@ -204,7 +230,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 SizedBox(height: 5),
                 Text(
-                  '💡 Info: Goyangkan HP untuk menyembunyikan saldo',
+                  'Info: Ketuk ikon mata atau goyangkan HP untuk hide/show saldo',
                   style: TextStyle(
                     color: Colors.white54,
                     fontSize: 12,
@@ -246,7 +272,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           SizedBox(height: 10),
 
-          // LIST ASET dari backend (sumber Tokocrypto)
           Expanded(
             child: ListView(
               children: [
@@ -292,7 +317,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Text(symbol[0], style: TextStyle(color: Colors.white)),
         ),
         title: Text(name, style: TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(hasPrice ? _formatUsd(priceUsd) : 'Harga belum tersedia'),
+        subtitle: Text(
+          hasPrice ? _formatUsd(priceUsd) : 'Harga belum tersedia',
+        ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,

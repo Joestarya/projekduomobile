@@ -2,14 +2,16 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'api_config.dart';
-import 'biometric_auth_service.dart';
+import '../service/api_config.dart';
+import '../service/biometric_auth_service.dart';
 import 'register_screen.dart';
-import 'screens/home_screen.dart';
+import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
@@ -82,9 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
       builder: (context) {
         return AlertDialog(
           title: const Text('Aktifkan Autentikasi Biometrik'),
-          content: const Text(
-            'Aktifkan Fingerprint?',
-          ),
+          content: const Text('Aktifkan Fingerprint?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -120,6 +120,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
+
+    if (username.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Username dan password wajib diisi')),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
@@ -129,18 +139,27 @@ class _LoginScreenState extends State<LoginScreen> {
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'username': _usernameController.text,
-          'password': _passwordController.text,
-        }),
+        body: jsonEncode({'username': username, 'password': password}),
       );
 
-      final data = jsonDecode(response.body);
+      final data = response.body.isNotEmpty ? jsonDecode(response.body) : {};
 
       if (response.statusCode == 200) {
         // Login Berhasil -> Simpan Token (Kriteria: Session)
-        SharedPreferences prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', data['token']);
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
+        final token = (data['token'] ?? '').toString();
+
+        if (token.isEmpty) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Token login tidak valid dari server'),
+            ),
+          );
+          return;
+        }
+
+        await prefs.setString('token', token);
         await _maybeEnableBiometricAfterLogin();
 
         if (!mounted) return;
@@ -163,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: Tidak bisa terhubung ke server')),
+        const SnackBar(content: Text('Error: Tidak bisa terhubung ke server')),
       );
     } finally {
       if (mounted) {
