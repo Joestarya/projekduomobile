@@ -31,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Jaga Lilin'),
+        titleTextStyle: TextStyle(fontSize: 24, fontWeight: FontWeight.bold,color: const Color.fromARGB(255, 224, 222, 222)),
         backgroundColor: Colors.indigo,
         actions: [
           IconButton(
