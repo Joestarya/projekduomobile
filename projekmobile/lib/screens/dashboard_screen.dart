@@ -12,6 +12,20 @@ class DashboardScreen extends StatefulWidget {
   _DashboardScreenState createState() => _DashboardScreenState();
 }
 
+class _AssetItem {
+  final String name;
+  final String symbol;
+  final String pair;
+  final double priceUsd;
+
+  const _AssetItem({
+    required this.name,
+    required this.symbol,
+    required this.pair,
+    required this.priceUsd,
+  });
+}
+
 class _DashboardScreenState extends State<DashboardScreen> {
   static const Duration _priceRefreshInterval = Duration(seconds: 1);
 
@@ -23,7 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _priceError;
   String? _lastUpdatedAt;
   Timer? _priceRefreshTimer;
-  final Map<String, double> _assetPricesUsd = {};
+  List<_AssetItem> _assets = const [];
 
   // 1. Ubah tipe Subscription-nya ke UserAccelerometerEvent
   StreamSubscription<UserAccelerometerEvent>? _accelerometerSubscription;
@@ -70,24 +84,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final List<dynamic> assets = (jsonMap['data'] as List<dynamic>? ?? []);
       final updatedAt = jsonMap['updatedAt']?.toString();
 
-      final nextPrices = <String, double>{};
+      final nextAssets = <_AssetItem>[];
       for (final asset in assets) {
-        if (asset is Map<String, dynamic>) {
-          final pair = asset['pair']?.toString();
-          final price = num.tryParse(asset['price']?.toString() ?? '');
-          if (pair != null && price != null) {
-            nextPrices[pair] = price.toDouble();
-          }
+        if (asset is! Map) continue;
+
+        final name = asset['name']?.toString();
+        final symbol = asset['symbol']?.toString();
+        final pair = asset['pair']?.toString();
+        final price = num.tryParse(asset['price']?.toString() ?? '');
+
+        if (name == null || symbol == null || pair == null || price == null) {
+          continue;
         }
+
+        nextAssets.add(
+          _AssetItem(
+            name: name,
+            symbol: symbol,
+            pair: pair,
+            priceUsd: price.toDouble(),
+          ),
+        );
       }
 
       if (!mounted) return;
       setState(() {
-        _assetPricesUsd
-          ..clear()
-          ..addAll(nextPrices);
+        _assets = nextAssets;
         _lastUpdatedAt = updatedAt;
-        _priceError = null;
+        _priceError = assets.isNotEmpty && nextAssets.isEmpty
+            ? 'Format data aset tidak sesuai'
+            : null;
         _isLoadingPrices = false;
       });
     } catch (_) {
@@ -273,40 +299,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
           SizedBox(height: 10),
 
           Expanded(
-            child: ListView(
-              children: [
-                _buildAssetTile(
-                  'Bitcoin',
-                  'BTC',
-                  0.015,
-                  _assetPricesUsd['BTCUSDT'],
-                  Colors.orange,
-                ),
-                _buildAssetTile(
-                  'Ethereum',
-                  'ETH',
-                  0.5,
-                  _assetPricesUsd['ETHUSDT'],
-                  Colors.blue,
-                ),
-              ],
-            ),
+            child: _assets.isEmpty
+                ? Center(
+                    child: Text(
+                      'Belum ada data aset dari server',
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _assets.length,
+                    itemBuilder: (context, index) {
+                      return _buildAssetTile(_assets[index]);
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 
+  Color _iconColorForSymbol(String symbol) {
+    switch (symbol.toUpperCase()) {
+      case 'BTC':
+        return Colors.orange;
+      case 'ETH':
+        return Colors.blue;
+      default:
+        return Colors.indigo;
+    }
+  }
+
   // Fungsi untuk membuat baris aset
-  Widget _buildAssetTile(
-    String name,
-    String symbol,
-    double amount,
-    double? priceUsd,
-    Color iconColor,
-  ) {
-    final hasPrice = priceUsd != null;
-    final totalValue = hasPrice ? amount * priceUsd : null;
+  Widget _buildAssetTile(_AssetItem asset) {
+    final iconColor = _iconColorForSymbol(asset.symbol);
 
     return Card(
       elevation: 2,
@@ -314,23 +339,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: iconColor,
-          child: Text(symbol[0], style: TextStyle(color: Colors.white)),
+          child: Text(asset.symbol[0], style: TextStyle(color: Colors.white)),
         ),
-        title: Text(name, style: TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(
-          hasPrice ? _formatUsd(priceUsd) : 'Harga belum tersedia',
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              _isPrivacyMode
-                  ? '\$*****'
-                  : (totalValue != null ? _formatUsd(totalValue) : '\$--'),
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
+        title: Text(asset.name, style: TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text(asset.pair),
+        trailing: Text(
+          _formatUsd(asset.priceUsd),
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
     );
