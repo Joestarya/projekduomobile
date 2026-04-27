@@ -30,7 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('CoinWise'),
+        title: Text('Jaga Lilin'),
         backgroundColor: Colors.indigo,
         actions: [
           IconButton(
@@ -77,7 +77,7 @@ class ProfileMenu extends StatelessWidget {
         SizedBox(height: 16),
         Center(
           child: Text(
-            'User CoinWise',
+            'User',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
         ),
