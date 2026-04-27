@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_config.dart';
+import 'biometric_auth_service.dart';
 import 'register_screen.dart';
 import 'screens/home_screen.dart';
 
@@ -15,6 +16,108 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _showBiometricLogin = false;
+  bool _isBiometricLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometricAvailability();
+  }
+
+  Future<void> _loadBiometricAvailability() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    final biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
+    final canAuthenticate = await BiometricAuthService.canAuthenticate();
+
+    if (!mounted) return;
+    setState(() {
+      _showBiometricLogin =
+          token != null &&
+          token.isNotEmpty &&
+          biometricEnabled &&
+          canAuthenticate;
+    });
+  }
+
+  Future<void> _loginWithBiometric() async {
+    setState(() {
+      _isBiometricLoading = true;
+    });
+
+    final bool isAuthenticated = await BiometricAuthService.authenticate(
+      reason: 'Verifikasi biometrik untuk masuk ke akun Anda',
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _isBiometricLoading = false;
+    });
+
+    if (isAuthenticated) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HomeScreen()),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Autentikasi biometrik gagal atau dibatalkan'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _maybeEnableBiometricAfterLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final alreadyEnabled = prefs.getBool('biometric_enabled') ?? false;
+    if (alreadyEnabled) return;
+
+    final canAuthenticate = await BiometricAuthService.canAuthenticate();
+    if (!canAuthenticate || !mounted) return;
+
+    final shouldEnable = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Aktifkan Autentikasi Biometrik'),
+          content: const Text(
+            'Aktifkan Fingerprint?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Nanti'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Aktifkan'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldEnable != true) return;
+
+    final isAuthenticated = await BiometricAuthService.authenticate(
+      reason: 'Verifikasi untuk mengaktifkan login biometrik',
+    );
+
+    if (!mounted) return;
+    if (isAuthenticated) {
+      await prefs.setBool('biometric_enabled', true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Login biometrik berhasil diaktifkan')),
+      );
+      await _loadBiometricAvailability();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aktivasi biometrik dibatalkan')),
+      );
+    }
+  }
 
   Future<void> _login() async {
     setState(() {
@@ -38,6 +141,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // Login Berhasil -> Simpan Token (Kriteria: Session)
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', data['token']);
+        await _maybeEnableBiometricAfterLogin();
 
         if (!mounted) return;
 
@@ -142,6 +246,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     child: const Text('Login'),
                   ),
+            if (_showBiometricLogin) ...[
+              const SizedBox(height: 12),
+              _isBiometricLoading
+                  ? const CircularProgressIndicator()
+                  : OutlinedButton.icon(
+                      onPressed: _loginWithBiometric,
+                      icon: const Icon(Icons.fingerprint),
+                      label: const Text('Login dengan Fingerprint/Face'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(250, 56),
+                      ),
+                    ),
+            ],
           ],
         ),
       ),
