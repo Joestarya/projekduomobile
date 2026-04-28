@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import '../service/api_config.dart';
 
 class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
+
   @override
   _RegisterScreenState createState() => _RegisterScreenState();
 }
