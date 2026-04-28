@@ -2,6 +2,8 @@ import 'dashboard_screen.dart';
 import 'package:flutter/material.dart';
 import 'settings_screen.dart';
 
+import 'map_screen.dart';
+
 class HomeScreen extends StatefulWidget {
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -13,10 +15,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Daftar halaman untuk Bottom Navigation
   static final List<Widget> _widgetOptions = <Widget>[
     DashboardScreen(),
-    Text(
-      'Dashboard Portofolio & DCA (Segera Hadir)',
-      style: TextStyle(fontSize: 20),
-    ),
+    AtmFinderScreen(), 
     ProfileMenu(), // Menu Profil & Saran Kesan (Wajib Tugas Akhir)
   ];
 
