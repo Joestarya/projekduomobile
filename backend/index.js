@@ -9,15 +9,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-
+// ==========================================
+// BINANCE CONFIG
+// ==========================================
 const DEFAULT_BINANCE_BASE_URLS = [
-    'https://api.binance.com/api/v3/ticker/price',
-    'https://data-api.binance.vision/api/v3/ticker/price',
+    'https://api.binance.com/api/v3',
+    'https://data-api.binance.vision/api/v3',
 ];
 
 const BINANCE_BASE_URLS = (process.env.BINANCE_BASE_URLS || '')
     .split(',')
-    .map((url) => url.trim())
+    .map((url) => url.trim().replace(/\/+$/, ''))
     .filter(Boolean);
 
 if (BINANCE_BASE_URLS.length === 0) {
@@ -30,8 +32,7 @@ if (!SECRET_KEY) {
 }
 
 // ==========================================
-// CACHE IN-MEMORY (Solusi real-time tanpa
-// hammering Binance setiap request masuk)
+// CACHE IN-MEMORY
 // ==========================================
 let priceCache = {
     data: [],
@@ -39,53 +40,72 @@ let priceCache = {
     isFetching: false,
 };
 
-const CACHE_TTL_MS = 1500; // Update cache setiap 1.5 detik
+// Cache sparkline/kline per symbol: { BTCUSDT: [prices...], ... }
+let klineCache = {};
+let klineCacheUpdatedAt = {};
+const KLINE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit
 
-async function getPriceFromBinance(symbol) {
+const CACHE_TTL_MS = 1500;
+
+// ==========================================
+// HELPER: Fetch dengan fallback multi-URL
+// ==========================================
+async function fetchBinance(path) {
     let lastError = null;
     for (const baseUrl of BINANCE_BASE_URLS) {
         try {
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 4000);
-
-            const response = await fetch(`${baseUrl}?symbol=${symbol}`, {
-                signal: controller.signal,
-            });
+            const timeout = setTimeout(() => controller.abort(), 5000);
+            const response = await fetch(`${baseUrl}${path}`, { signal: controller.signal });
             clearTimeout(timeout);
-
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-            const data = await response.json();
-            const price = Number(data.price);
-            if (!Number.isFinite(price)) throw new Error('Data harga tidak valid');
-
-            return price;
+            return await response.json();
         } catch (error) {
             lastError = `${baseUrl} -> ${error.message}`;
         }
     }
-    throw new Error(`Semua endpoint Binance gagal untuk ${symbol}. ${lastError || ''}`.trim());
+    throw new Error(`Semua endpoint Binance gagal. ${lastError || ''}`.trim());
 }
 
-/**
- * Refresh cache harga di background.
- * Dipanggil secara periodik agar endpoint /crypto/prices
- * selalu merespons dengan data terbaru tanpa nunggu fetch.
- */
+// ==========================================
+// PRICE CACHE
+// ==========================================
 async function refreshPriceCache() {
     if (priceCache.isFetching) return;
     priceCache.isFetching = true;
 
+    const ASSETS = [
+        { symbol: 'BTCUSDT', name: 'Bitcoin', short: 'BTC' },
+        { symbol: 'ETHUSDT', name: 'Ethereum', short: 'ETH' },
+        { symbol: 'BNBUSDT', name: 'BNB', short: 'BNB' },
+        { symbol: 'SOLUSDT', name: 'Solana', short: 'SOL' },
+    ];
+
     try {
-        const [btcPrice, ethPrice] = await Promise.all([
-            getPriceFromBinance('BTCUSDT'),
-            getPriceFromBinance('ETHUSDT'),
+        // Fetch harga sekarang + 24hr stats sekaligus
+        const [tickerData] = await Promise.all([
+            fetchBinance(`/ticker/24hr?symbols=${JSON.stringify(ASSETS.map((a) => a.symbol))}`),
         ]);
 
-        priceCache.data = [
-            { name: 'Bitcoin', symbol: 'BTC', pair: 'BTCUSDT', price: btcPrice },
-            { name: 'Ethereum', symbol: 'ETH', pair: 'ETHUSDT', price: ethPrice },
-        ];
+        const parsed = Array.isArray(tickerData) ? tickerData : [tickerData];
+
+        priceCache.data = parsed
+            .map((t) => {
+                const meta = ASSETS.find((a) => a.symbol === t.symbol);
+                if (!meta) return null;
+                return {
+                    name: meta.name,
+                    symbol: meta.short,
+                    pair: t.symbol,
+                    price: parseFloat(t.lastPrice),
+                    changePercent: parseFloat(t.priceChangePercent),
+                    high24h: parseFloat(t.highPrice),
+                    low24h: parseFloat(t.lowPrice),
+                    volume24h: parseFloat(t.volume),
+                };
+            })
+            .filter(Boolean);
+
         priceCache.updatedAt = new Date().toISOString();
     } catch (err) {
         console.error('[PriceCache] Gagal refresh:', err.message);
@@ -94,9 +114,67 @@ async function refreshPriceCache() {
     }
 }
 
-// Jalankan refresh cache saat server start & setiap 1.5 detik
+// ==========================================
+// KLINE/SPARKLINE CACHE
+// ==========================================
+async function refreshKlineCache(symbol, interval = '1h', limit = 24) {
+    const cacheKey = `${symbol}_${interval}_${limit}`;
+    const now = Date.now();
+
+    // Cek apakah perlu refresh
+    if (
+        klineCache[cacheKey] &&
+        klineCacheUpdatedAt[cacheKey] &&
+        now - klineCacheUpdatedAt[cacheKey] < KLINE_CACHE_TTL_MS
+    ) {
+        return klineCache[cacheKey];
+    }
+
+    try {
+        const data = await fetchBinance(
+            `/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`
+        );
+
+        if (!Array.isArray(data)) throw new Error('Format kline tidak valid');
+
+        // Binance kline format: [openTime, open, high, low, close, volume, ...]
+        const klines = data.map((k) => ({
+            openTime: k[0],
+            open: parseFloat(k[1]),
+            high: parseFloat(k[2]),
+            low: parseFloat(k[3]),
+            close: parseFloat(k[4]),
+            volume: parseFloat(k[5]),
+        }));
+
+        klineCache[cacheKey] = klines;
+        klineCacheUpdatedAt[cacheKey] = now;
+
+        return klines;
+    } catch (err) {
+        console.error(`[KlineCache] Gagal refresh ${symbol}:`, err.message);
+        return klineCache[cacheKey] || [];
+    }
+}
+
+// Pre-warm cache saat startup
+async function warmUpKlineCache() {
+    const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT'];
+    for (const sym of symbols) {
+        await refreshKlineCache(sym).catch(() => {});
+    }
+}
+
+// Jalankan saat server start
 refreshPriceCache();
 setInterval(refreshPriceCache, CACHE_TTL_MS);
+warmUpKlineCache();
+
+// Refresh kline cache setiap 5 menit
+setInterval(() => {
+    const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT'];
+    symbols.forEach((sym) => refreshKlineCache(sym).catch(() => {}));
+}, KLINE_CACHE_TTL_MS);
 
 // ==========================================
 // 1. ENDPOINT REGISTER
@@ -161,10 +239,11 @@ app.post('/login', (req, res) => {
     });
 });
 
-
+// ==========================================
+// 3. ENDPOINT HARGA REALTIME
+// ==========================================
 app.get('/crypto/prices', (_req, res) => {
     if (!priceCache.updatedAt) {
-        // Cache belum siap (baru start), tunggu sebentar lalu coba lagi
         return res.status(503).json({
             message: 'Server sedang inisialisasi, coba lagi dalam 2 detik.',
         });
@@ -178,17 +257,102 @@ app.get('/crypto/prices', (_req, res) => {
     });
 });
 
+// ==========================================
+// 4. ENDPOINT KLINE (SPARKLINE/CHART DATA) ← NEW
+// ==========================================
+/**
+ * GET /crypto/klines?symbol=BTCUSDT&interval=1h&limit=24
+ *
+ * Query params:
+ *   symbol   : Binance pair (default: BTCUSDT)
+ *   interval : 1m, 5m, 15m, 1h, 4h, 1d (default: 1h)
+ *   limit    : jumlah candle, max 100 (default: 24)
+ */
+app.get('/crypto/klines', async (req, res) => {
+    const symbol = (req.query.symbol || 'BTCUSDT').toUpperCase();
+    const interval = req.query.interval || '1h';
+    const limit = Math.min(parseInt(req.query.limit) || 24, 100);
+
+    // Validasi interval
+    const validIntervals = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d', '3d', '1w'];
+    if (!validIntervals.includes(interval)) {
+        return res.status(400).json({ message: `Interval tidak valid. Gunakan: ${validIntervals.join(', ')}` });
+    }
+
+    try {
+        const klines = await refreshKlineCache(symbol, interval, limit);
+
+        res.json({
+            source: 'binance',
+            symbol,
+            interval,
+            limit,
+            count: klines.length,
+            data: klines,
+        });
+    } catch (err) {
+        res.status(500).json({ message: 'Gagal mengambil data kline.', error: err.message });
+    }
+});
+
+// ==========================================
+// 5. ENDPOINT KLINE BATCH (multiple symbols) ← NEW
+// ==========================================
+/**
+ * GET /crypto/klines/batch?symbols=BTCUSDT,ETHUSDT&interval=1h&limit=24
+ *
+ * Return sparkline data untuk beberapa symbol sekaligus,
+ * berguna agar Flutter hanya butuh 1 request.
+ */
+app.get('/crypto/klines/batch', async (req, res) => {
+    const rawSymbols = req.query.symbols || 'BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT';
+    const symbols = rawSymbols
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean)
+        .slice(0, 10); // max 10 symbols per request
+
+    const interval = req.query.interval || '1h';
+    const limit = Math.min(parseInt(req.query.limit) || 24, 100);
+
+    try {
+        const results = await Promise.all(
+            symbols.map(async (symbol) => {
+                const klines = await refreshKlineCache(symbol, interval, limit);
+                return {
+                    symbol,
+                    // Return hanya close prices untuk efisiensi (sparkline)
+                    closes: klines.map((k) => k.close),
+                    updatedAt: klineCacheUpdatedAt[`${symbol}_${interval}_${limit}`]
+                        ? new Date(klineCacheUpdatedAt[`${symbol}_${interval}_${limit}`]).toISOString()
+                        : null,
+                };
+            })
+        );
+
+        res.json({
+            source: 'binance',
+            interval,
+            limit,
+            data: results,
+        });
+    } catch (err) {
+        res.status(500).json({ message: 'Gagal mengambil data kline batch.', error: err.message });
+    }
+});
+
+// ==========================================
+// 6. SSE STREAM
+// ==========================================
 const sseClients = new Set();
 
 app.get('/crypto/prices/stream', (req, res) => {
-    // Set headers untuk SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Penting untuk Nginx
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    // Kirim data awal
     const sendData = () => {
         if (priceCache.updatedAt) {
             const payload = JSON.stringify({
@@ -204,19 +368,14 @@ app.get('/crypto/prices/stream', (req, res) => {
     sendData();
     sseClients.add(sendData);
 
-    // Heartbeat setiap 30 detik (cegah timeout)
-    const heartbeat = setInterval(() => {
-        res.write(': ping\n\n');
-    }, 30000);
+    const heartbeat = setInterval(() => res.write(': ping\n\n'), 30000);
 
-    // Cleanup saat client disconnect
     req.on('close', () => {
         sseClients.delete(sendData);
         clearInterval(heartbeat);
     });
 });
 
-// Broadcast ke semua SSE client setiap kali cache di-update
 setInterval(() => {
     if (sseClients.size > 0 && priceCache.updatedAt) {
         const payload = JSON.stringify({
@@ -237,6 +396,10 @@ setInterval(() => {
 
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server Backend TPM berjalan di http://0.0.0.0:${PORT}`);
-    console.log(`SSE stream tersedia di http://0.0.0.0:${PORT}/crypto/prices/stream`);
+    console.log(`Server Backend berjalan di http://0.0.0.0:${PORT}`);
+    console.log(`Endpoints:`);
+    console.log(`  GET /crypto/prices          - Harga realtime`);
+    console.log(`  GET /crypto/prices/stream   - SSE stream`);
+    console.log(`  GET /crypto/klines          - Kline/chart data (1 symbol)`);
+    console.log(`  GET /crypto/klines/batch    - Kline/chart data (multi symbol)`);
 });

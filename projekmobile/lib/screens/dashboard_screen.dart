@@ -15,7 +15,9 @@ class _AssetItem {
   final String symbol;
   final String pair;
   final double priceUsd;
-  final double? prevPriceUsd; // untuk flash animasi naik/turun
+  final double? prevPriceUsd;
+  final double changePercent; // % perubahan 24h
+  final List<double> sparkline; // data mini chart
 
   const _AssetItem({
     required this.name,
@@ -23,15 +25,101 @@ class _AssetItem {
     required this.pair,
     required this.priceUsd,
     this.prevPriceUsd,
+    this.changePercent = 0.0,
+    this.sparkline = const [],
   });
 
   _AssetItem copyWithPrev(double prev) => _AssetItem(
-    name: name,
-    symbol: symbol,
-    pair: pair,
-    priceUsd: priceUsd,
-    prevPriceUsd: prev,
-  );
+        name: name,
+        symbol: symbol,
+        pair: pair,
+        priceUsd: priceUsd,
+        prevPriceUsd: prev,
+        changePercent: changePercent,
+        sparkline: sparkline,
+      );
+}
+
+// ─────────────────────────────────────────────
+// SPARKLINE PAINTER (Mini Chart seperti Stockbit)
+// ─────────────────────────────────────────────
+class _SparklinePainter extends CustomPainter {
+  final List<double> data;
+  final bool isUp;
+
+  const _SparklinePainter({required this.data, required this.isUp});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.length < 2) return;
+
+    final minVal = data.reduce(min);
+    final maxVal = data.reduce(max);
+    final range = (maxVal - minVal).abs();
+    if (range == 0) return;
+
+    final upColor = const Color(0xFF00E676);
+    final downColor = const Color(0xFFFF5252);
+    final lineColor = isUp ? upColor : downColor;
+    final fillColor = isUp
+        ? const Color(0xFF00E676).withOpacity(0.15)
+        : const Color(0xFFFF5252).withOpacity(0.15);
+
+    final linePaint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final fillPaint = Paint()
+      ..color = fillColor
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    final fillPath = Path();
+
+    for (int i = 0; i < data.length; i++) {
+      final x = (i / (data.length - 1)) * size.width;
+      final normalized = (data[i] - minVal) / range;
+      final y = size.height - (normalized * size.height * 0.85) - (size.height * 0.075);
+
+      if (i == 0) {
+        path.moveTo(x, y);
+        fillPath.moveTo(x, size.height);
+        fillPath.lineTo(x, y);
+      } else {
+        // Smooth curve dengan cubic bezier
+        final prevX = ((i - 1) / (data.length - 1)) * size.width;
+        final prevNorm = (data[i - 1] - minVal) / range;
+        final prevY = size.height - (prevNorm * size.height * 0.85) - (size.height * 0.075);
+        final cpX = (prevX + x) / 2;
+        path.cubicTo(cpX, prevY, cpX, y, x, y);
+        fillPath.cubicTo(cpX, prevY, cpX, y, x, y);
+      }
+    }
+
+    // Tutup fill path ke bawah
+    fillPath.lineTo(size.width, size.height);
+    fillPath.close();
+
+    canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(path, linePaint);
+
+    // Titik di ujung kanan (harga sekarang)
+    final lastX = size.width;
+    final lastNorm = (data.last - minVal) / range;
+    final lastY = size.height - (lastNorm * size.height * 0.85) - (size.height * 0.075);
+    canvas.drawCircle(
+      Offset(lastX, lastY),
+      2.5,
+      Paint()..color = lineColor,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter oldDelegate) =>
+      oldDelegate.data != data || oldDelegate.isUp != isUp;
 }
 
 // ─────────────────────────────────────────────
@@ -65,12 +153,7 @@ const List<_TimezoneOption> _timezones = [
   _TimezoneOption(label: 'CST', city: 'Chicago', offsetHours: -6),
   _TimezoneOption(label: 'PST', city: 'Los Angeles', offsetHours: -8),
   _TimezoneOption(label: 'CET', city: 'Paris', offsetHours: 1),
-  _TimezoneOption(
-    label: 'IST',
-    city: 'Mumbai',
-    offsetHours: 5,
-    offsetMinutes: 30,
-  ),
+  _TimezoneOption(label: 'IST', city: 'Mumbai', offsetHours: 5, offsetMinutes: 30),
   _TimezoneOption(label: 'SGT', city: 'Singapore', offsetHours: 8),
   _TimezoneOption(label: 'JST', city: 'Tokyo', offsetHours: 9),
   _TimezoneOption(label: 'AEST', city: 'Sydney', offsetHours: 10),
@@ -88,8 +171,8 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
-  // Interval fetch harga (lebih cepat = lebih real-time)
   static const Duration _priceRefreshInterval = Duration(milliseconds: 2000);
+  static const Duration _chartRefreshInterval = Duration(minutes: 5);
 
   // ── State ──────────────────────────────────
   bool _isPrivacyMode = false;
@@ -100,19 +183,24 @@ class _DashboardScreenState extends State<DashboardScreen>
   String? _priceError;
   String? _lastUpdatedAt;
   List<_AssetItem> _assets = const [];
-  _TimezoneOption _selectedTimezone = _timezones[0]; // Default WIB
+  _TimezoneOption _selectedTimezone = _timezones[0];
   String _clockDisplay = '';
   String _dateDisplay = '';
 
+  // Sparkline data cache per symbol
+  final Map<String, List<double>> _sparklineCache = {};
+
   // ── Timers & Subscriptions ─────────────────
   Timer? _priceRefreshTimer;
+  Timer? _chartRefreshTimer;
   Timer? _clockTimer;
   StreamSubscription<UserAccelerometerEvent>? _accelerometerSubscription;
   DateTime _lastShakeTime = DateTime.now();
 
   // ── Animation ─────────────────────────────
   late AnimationController _pulseController;
-  // Map symbol -> flash color (green/red)
+  late AnimationController _cardSlideController;
+  late Animation<double> _cardSlideAnimation;
   final Map<String, Color?> _flashColors = {};
   final Map<String, Timer?> _flashTimers = {};
 
@@ -123,53 +211,53 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
+
+    _cardSlideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _cardSlideAnimation = CurvedAnimation(
+      parent: _cardSlideController,
+      curve: Curves.easeOutCubic,
+    );
 
     _startClock();
     _startShakeDetection();
     _requestPriceFetch(showLoader: true);
+    _fetchAllSparklines();
 
     _priceRefreshTimer = Timer.periodic(_priceRefreshInterval, (_) {
       _requestPriceFetch(showLoader: false);
     });
+    _chartRefreshTimer = Timer.periodic(_chartRefreshInterval, (_) {
+      _fetchAllSparklines();
+    });
+
+    // Animasi masuk
+    Future.delayed(const Duration(milliseconds: 200), () {
+      _cardSlideController.forward();
+    });
   }
 
   // ─────────────────────────────────────────────
-  // JAM REAL-TIME
+  // CLOCK
   // ─────────────────────────────────────────────
   void _startClock() {
     _updateClock();
-    _clockTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => _updateClock(),
-    );
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
   }
 
   void _updateClock() {
     if (!mounted) return;
     final now = _selectedTimezone.now();
     setState(() {
-      final hh = now.hour.toString().padLeft(2, '0');
-      final mm = now.minute.toString().padLeft(2, '0');
-      final ss = now.second.toString().padLeft(2, '0');
-      _clockDisplay = '$hh:$mm:$ss';
+      _clockDisplay =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
 
       const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
-      const months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'Mei',
-        'Jun',
-        'Jul',
-        'Agu',
-        'Sep',
-        'Okt',
-        'Nov',
-        'Des',
-      ];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
       _dateDisplay =
           '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]} ${now.year}';
     });
@@ -181,8 +269,58 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ─────────────────────────────────────────────
-  // PRICE FETCH — FIX REAL-TIME
-  // Strategi: queue + debounce agar tidak overlap
+  // SPARKLINE FETCH — dari Binance Kline API
+  // ─────────────────────────────────────────────
+  Future<void> _fetchAllSparklines() async {
+    final symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT'];
+    for (final sym in symbols) {
+      _fetchSparkline(sym);
+    }
+  }
+
+  Future<void> _fetchSparkline(String symbol) async {
+    // Coba dari backend dulu, fallback ke Binance langsung
+    try {
+      // Coba endpoint backend custom
+      final backendUrl = ApiConfig.endpoint('/crypto/klines?symbol=$symbol&interval=1h&limit=24');
+      final resp = await http
+          .get(Uri.parse(backendUrl))
+          .timeout(const Duration(seconds: 5));
+
+      if (resp.statusCode == 200) {
+        final json = jsonDecode(resp.body);
+        final List<dynamic> klines = json['data'] ?? [];
+        if (klines.isNotEmpty) {
+          final prices = klines.map<double>((k) => double.tryParse(k['close'].toString()) ?? 0).toList();
+          if (mounted) setState(() => _sparklineCache[symbol] = prices);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // Fallback: langsung ke Binance public API
+    try {
+      final binanceUrl = 'https://api.binance.com/api/v3/klines?symbol=$symbol&interval=1h&limit=24';
+      final resp = await http
+          .get(Uri.parse(binanceUrl))
+          .timeout(const Duration(seconds: 6));
+
+      if (resp.statusCode == 200) {
+        final List<dynamic> klines = jsonDecode(resp.body);
+        // Binance kline format: [openTime, open, high, low, close, ...]
+        final prices = klines.map<double>((k) {
+          return double.tryParse(k[4].toString()) ?? 0; // index 4 = close price
+        }).toList();
+
+        if (mounted && prices.isNotEmpty) {
+          setState(() => _sparklineCache[symbol] = prices);
+        }
+      }
+    } catch (_) {}
+  }
+
+  // ─────────────────────────────────────────────
+  // PRICE FETCH
   // ─────────────────────────────────────────────
   void _requestPriceFetch({required bool showLoader}) {
     if (_isFetchingPrices) {
@@ -205,13 +343,9 @@ class _DashboardScreenState extends State<DashboardScreen>
     try {
       final response = await http
           .get(Uri.parse(ApiConfig.endpoint('/crypto/prices')))
-          .timeout(
-            const Duration(seconds: 5),
-          ); // Timeout agar tidak nunggu lama
+          .timeout(const Duration(seconds: 5));
 
-      if (response.statusCode != 200) {
-        throw Exception('HTTP ${response.statusCode}');
-      }
+      if (response.statusCode != 200) throw Exception('HTTP ${response.statusCode}');
 
       final Map<String, dynamic> jsonMap = jsonDecode(response.body);
       final List<dynamic> assets = (jsonMap['data'] as List<dynamic>? ?? []);
@@ -224,14 +358,13 @@ class _DashboardScreenState extends State<DashboardScreen>
         final symbol = asset['symbol']?.toString();
         final pair = asset['pair']?.toString();
         final price = num.tryParse(asset['price']?.toString() ?? '');
-        if (name == null || symbol == null || pair == null || price == null)
-          continue;
+        final changePct = num.tryParse(asset['changePercent']?.toString() ?? '0') ?? 0;
+        if (name == null || symbol == null || pair == null || price == null) continue;
 
-        // Cari harga lama untuk flash
-        final prev = _assets
-            .where((a) => a.symbol == symbol)
-            .map((a) => a.priceUsd)
-            .firstOrNull;
+        final prev = _assets.where((a) => a.symbol == symbol).map((a) => a.priceUsd).firstOrNull;
+
+        // Ambil sparkline dari cache, pakai pair sebagai key (e.g. BTCUSDT)
+        final sparkline = _sparklineCache[pair] ?? [];
 
         final item = _AssetItem(
           name: name,
@@ -239,10 +372,11 @@ class _DashboardScreenState extends State<DashboardScreen>
           pair: pair,
           priceUsd: price.toDouble(),
           prevPriceUsd: prev,
+          changePercent: changePct.toDouble(),
+          sparkline: sparkline,
         );
         nextAssets.add(item);
 
-        // Trigger flash jika harga berubah
         if (prev != null && prev != price.toDouble()) {
           _triggerFlash(symbol, price.toDouble() > prev);
         }
@@ -252,9 +386,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       setState(() {
         _assets = nextAssets;
         _lastUpdatedAt = updatedAt;
-        _priceError = assets.isNotEmpty && nextAssets.isEmpty
-            ? 'Format data aset tidak sesuai'
-            : null;
+        _priceError = null;
         _isLoadingPrices = false;
       });
     } on TimeoutException {
@@ -280,9 +412,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   void _triggerFlash(String symbol, bool isUp) {
     _flashTimers[symbol]?.cancel();
-    setState(
-      () => _flashColors[symbol] = isUp ? Colors.greenAccent : Colors.redAccent,
-    );
+    setState(() => _flashColors[symbol] = isUp ? Colors.greenAccent : Colors.redAccent);
     _flashTimers[symbol] = Timer(const Duration(milliseconds: 600), () {
       if (mounted) setState(() => _flashColors[symbol] = null);
     });
@@ -294,30 +424,30 @@ class _DashboardScreenState extends State<DashboardScreen>
   void _startShakeDetection() {
     if (kIsWeb ||
         (defaultTargetPlatform != TargetPlatform.android &&
-            defaultTargetPlatform != TargetPlatform.iOS))
-      return;
+            defaultTargetPlatform != TargetPlatform.iOS)) return;
 
-    _accelerometerSubscription = userAccelerometerEvents.listen((
-      UserAccelerometerEvent event,
-    ) {
-      final gForce = sqrt(
-        event.x * event.x + event.y * event.y + event.z * event.z,
-      );
-      if (gForce > 12) {
-        final now = DateTime.now();
-        if (now.difference(_lastShakeTime).inMilliseconds > 1500) {
-          _lastShakeTime = now;
-          setState(() => _isPrivacyMode = !_isPrivacyMode);
+    _accelerometerSubscription = userAccelerometerEvents.listen(
+      (UserAccelerometerEvent event) {
+        final gForce = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+        if (gForce > 12) {
+          final now = DateTime.now();
+          if (now.difference(_lastShakeTime).inMilliseconds > 1500) {
+            _lastShakeTime = now;
+            setState(() => _isPrivacyMode = !_isPrivacyMode);
+          }
         }
-      }
-    }, onError: (_) {});
+      },
+      onError: (_) {},
+    );
   }
 
   // ─────────────────────────────────────────────
   @override
   void dispose() {
     _pulseController.dispose();
+    _cardSlideController.dispose();
     _priceRefreshTimer?.cancel();
+    _chartRefreshTimer?.cancel();
     _clockTimer?.cancel();
     _accelerometerSubscription?.cancel();
     for (final t in _flashTimers.values) {
@@ -327,24 +457,28 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ─────────────────────────────────────────────
-  // HELPERS FORMAT
+  // FORMAT HELPERS
   // ─────────────────────────────────────────────
   String _formatUsd(double value) {
-    final fixed = value.toStringAsFixed(2);
-    final parts = fixed.split('.');
-    final wholeWithCommas = parts[0].replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (_) => ',',
-    );
-    return '\$$wholeWithCommas.${parts[1]}';
+    if (value >= 10000) {
+      final fixed = value.toStringAsFixed(0);
+      return '\$${fixed.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',')}';
+    } else if (value >= 1) {
+      return '\$${value.toStringAsFixed(2).replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',')}';
+    } else {
+      return '\$${value.toStringAsFixed(4)}';
+    }
   }
 
   String _formatUpdatedTime(String isoTime) {
     final dt = DateTime.tryParse(isoTime)?.toLocal();
     if (dt == null) return '-';
-    return '${dt.hour.toString().padLeft(2, '0')}:'
-        '${dt.minute.toString().padLeft(2, '0')}:'
-        '${dt.second.toString().padLeft(2, '0')}';
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+  }
+
+  String _formatChangePercent(double pct) {
+    final sign = pct >= 0 ? '+' : '';
+    return '$sign${pct.toStringAsFixed(2)}%';
   }
 
   // ─────────────────────────────────────────────
@@ -353,105 +487,116 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E1A),
+      backgroundColor: const Color(0xFF0C0F1A),
       appBar: _buildAppBar(),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildPortfolioCard(),
-              const SizedBox(height: 24),
-              _buildAssetsHeader(),
-              const SizedBox(height: 12),
-              Expanded(child: _buildAssetList()),
-            ],
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Portfolio Card dengan animasi slide
+            SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, -0.15),
+                end: Offset.zero,
+              ).animate(_cardSlideAnimation),
+              child: FadeTransition(
+                opacity: _cardSlideAnimation,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: _buildPortfolioCard(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _buildAssetsHeader(),
+            ),
+            const SizedBox(height: 8),
+            // Divider
+            Container(
+              height: 1,
+              color: const Color(0xFF1A2035),
+            ),
+            // List
+            Expanded(child: _buildAssetList()),
+          ],
         ),
       ),
     );
   }
 
   // ─────────────────────────────────────────────
-  // APP BAR dengan jam & timezone
+  // APP BAR
   // ─────────────────────────────────────────────
   PreferredSizeWidget _buildAppBar() {
     final isCompact = MediaQuery.of(context).size.width < 390;
-
     return PreferredSize(
-      preferredSize: const Size.fromHeight(72),
+      preferredSize: const Size.fromHeight(68),
       child: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF0D1117), Color(0xFF161B2E)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          border: Border(
-            bottom: BorderSide(color: Color(0xFF1E2740), width: 1),
-          ),
+          color: Color(0xFF0C0F1A),
+          border: Border(bottom: BorderSide(color: Color(0xFF151B2E), width: 1)),
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Kiri: Logo / judul
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF6C63FF), Color(0xFF3BC8E7)],
-                          ),
-                          borderRadius: BorderRadius.circular(10),
+                // Logo
+                Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF6C63FF), Color(0xFF3BC8E7)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                        child: const Icon(
-                          Icons.currency_bitcoin,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                        borderRadius: BorderRadius.circular(11),
                       ),
-                      const SizedBox(width: 10),
-                      const Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
+                      child: const Icon(Icons.currency_bitcoin, color: Colors.white, size: 21),
+                    ),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Jaga Lilin',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 17,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        Row(
                           children: [
-                            Text(
-                              'Jaga Lilin',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                                letterSpacing: 0.3,
+                            Container(
+                              width: 5,
+                              height: 5,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Color(0xFF00E676),
                               ),
                             ),
-                            Text(
+                            const SizedBox(width: 4),
+                            const Text(
                               'Live Market',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Color(0xFF6C8EBF),
-                                fontSize: 11,
-                              ),
+                              style: TextStyle(color: Color(0xFF4A6080), fontSize: 11),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ),
-
-                // Kanan: Jam + Timezone selector
-                const SizedBox(width: 8),
+                // Clock
                 Flexible(child: _buildClockWidget(isCompact: isCompact)),
               ],
             ),
@@ -462,122 +607,100 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildClockWidget({required bool isCompact}) {
-    return GestureDetector(
-      onTap: _showTimezoneBottomSheet,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: isCompact ? 10 : 12,
-          vertical: isCompact ? 4 : 6,
-        ),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A2035),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF2A3A5E), width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isCompact)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _clockDisplay,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 1,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6C63FF).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
+  return GestureDetector(
+    onTap: _showTimezoneBottomSheet,
+    child: Container(
+      constraints: const BoxConstraints(maxWidth: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), // ⬅️ kecilkan
+      decoration: BoxDecoration(
+        color: const Color(0xFF131929),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF1E2D48), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.max, // ⬅️ IMPORTANT
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
                     child: Text(
-                      _selectedTimezone.label,
+                      _clockDisplay,
+                      maxLines: 1,
                       style: const TextStyle(
-                        color: Color(0xFF8B85FF),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        fontSize: 15, // ⬅️ sedikit kecil
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),
                   ),
-                ],
-              )
-            else
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _clockDisplay,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _dateDisplay,
-                        style: const TextStyle(
-                          color: Color(0xFF6C8EBF),
-                          fontSize: 10,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF6C63FF).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          _selectedTimezone.label,
-                          style: const TextStyle(
-                            color: Color(0xFF8B85FF),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                ),
+
+                if (!isCompact)
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            _dateDisplay,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF4A6080),
+                              fontSize: 9, // ⬅️ kecilkan
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 3),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6C63FF).withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            _selectedTimezone.label,
+                            style: const TextStyle(
+                              color: Color(0xFF9D97FF),
+                              fontSize: 8, // ⬅️ kecilkan
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-            const SizedBox(width: 6),
-            const Icon(Icons.expand_more, color: Color(0xFF6C8EBF), size: 16),
-          ],
-        ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: Color(0xFF4A6080),
+            size: 16,
+          ),
+        ],
       ),
-    );
-  }
-
+    ),
+  );
+}
   void _showTimezoneBottomSheet() {
     final screenHeight = MediaQuery.of(context).size.height;
     final sheetHeight = min(screenHeight * 0.75, 520.0);
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF111827),
+      backgroundColor: const Color(0xFF0F1520),
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (_) => SafeArea(
         top: false,
@@ -585,28 +708,24 @@ class _DashboardScreenState extends State<DashboardScreen>
           height: sheetHeight,
           child: Column(
             children: [
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Container(
-                width: 40,
+                width: 36,
                 height: 4,
                 decoration: BoxDecoration(
                   color: const Color(0xFF2A3A5E),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               const Text(
                 'Pilih Zona Waktu',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
               ),
               const SizedBox(height: 8),
               Expanded(
                 child: ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.only(bottom: 16),
                   itemCount: _timezones.length,
                   itemBuilder: (_, index) {
                     final tz = _timezones[index];
@@ -618,60 +737,41 @@ class _DashboardScreenState extends State<DashboardScreen>
                         _onTimezoneChanged(tz);
                       },
                       leading: Container(
-                        width: 44,
+                        width: 46,
                         height: 28,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? const Color(0xFF6C63FF).withOpacity(0.25)
-                              : const Color(0xFF1A2035),
+                              ? const Color(0xFF6C63FF).withOpacity(0.2)
+                              : const Color(0xFF131929),
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF6C63FF)
-                                : const Color(0xFF2A3A5E),
+                            color: isSelected ? const Color(0xFF6C63FF) : const Color(0xFF1E2D48),
                           ),
                         ),
                         child: Text(
                           tz.label,
                           style: TextStyle(
-                            color: isSelected
-                                ? const Color(0xFF8B85FF)
-                                : const Color(0xFF6C8EBF),
+                            color: isSelected ? const Color(0xFF9D97FF) : const Color(0xFF4A6080),
                             fontWeight: FontWeight.w700,
-                            fontSize: 12,
+                            fontSize: 11,
                           ),
                         ),
                       ),
                       title: Text(
                         tz.city,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: isSelected
-                              ? Colors.white
-                              : const Color(0xFFB0BEC5),
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
+                          color: isSelected ? Colors.white : const Color(0xFFB0BEC5),
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                         ),
                       ),
                       subtitle: Text(
                         'UTC${tz.offsetHours >= 0 ? '+' : ''}${tz.offsetHours}'
                         '${tz.offsetMinutes > 0 ? ':${tz.offsetMinutes.toString().padLeft(2, '0')}' : ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF4A5C7A),
-                          fontSize: 12,
-                        ),
+                        style: const TextStyle(color: Color(0xFF2E4060), fontSize: 12),
                       ),
                       trailing: isSelected
-                          ? const Icon(
-                              Icons.check_circle,
-                              color: Color(0xFF6C63FF),
-                              size: 20,
-                            )
+                          ? const Icon(Icons.check_circle_rounded, color: Color(0xFF6C63FF), size: 20)
                           : null,
                     );
                   },
@@ -689,19 +789,20 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ─────────────────────────────────────────────
   Widget _buildPortfolioCard() {
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF1A1060), Color(0xFF0D2550), Color(0xFF0A1628)],
+          colors: [Color(0xFF1A1060), Color(0xFF0F2055), Color(0xFF091428)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          stops: [0.0, 0.5, 1.0],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF2A3A6E).withOpacity(0.5)),
+        border: Border.all(color: const Color(0xFF2A3870).withOpacity(0.6), width: 1),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6C63FF).withOpacity(0.15),
-            blurRadius: 20,
+            color: const Color(0xFF6C63FF).withOpacity(0.12),
+            blurRadius: 24,
             offset: const Offset(0, 8),
           ),
         ],
@@ -714,72 +815,57 @@ class _DashboardScreenState extends State<DashboardScreen>
             children: [
               const Text(
                 'Total Portofolio',
-                style: TextStyle(
-                  color: Color(0xFF8899BB),
-                  fontSize: 14,
-                  letterSpacing: 0.5,
-                ),
+                style: TextStyle(color: Color(0xFF7A90B0), fontSize: 13, letterSpacing: 0.5),
               ),
               GestureDetector(
                 onTap: () => setState(() => _isPrivacyMode = !_isPrivacyMode),
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.07),
+                    color: Colors.white.withOpacity(0.06),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
-                    _isPrivacyMode
-                        ? Icons.visibility_off_rounded
-                        : Icons.visibility_rounded,
-                    color: const Color(0xFF8899BB),
-                    size: 18,
+                    _isPrivacyMode ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                    color: const Color(0xFF7A90B0),
+                    size: 17,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Text(
-            _isPrivacyMode ? '\$  •••••••••' : _formatUsd(_totalBalance),
+            _isPrivacyMode ? '•••••••••' : _formatUsd(_totalBalance),
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 34,
+              fontSize: 32,
               fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
+              letterSpacing: -1,
+              height: 1,
             ),
           ),
           const SizedBox(height: 10),
-          // Badge perubahan
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00C853).withOpacity(0.15),
+                  color: const Color(0xFF00C853).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: const Color(0xFF00C853).withOpacity(0.3),
-                  ),
+                  border: Border.all(color: const Color(0xFF00C853).withOpacity(0.25)),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.arrow_upward,
-                      color: Color(0xFF00E676),
-                      size: 12,
-                    ),
-                    SizedBox(width: 4),
+                    Icon(Icons.arrow_upward_rounded, color: Color(0xFF00E676), size: 11),
+                    SizedBox(width: 3),
                     Text(
-                      '\$15.30  (1.6%)',
+                      '\$15.30  (+1.6%)',
                       style: TextStyle(
                         color: Color(0xFF00E676),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -788,29 +874,65 @@ class _DashboardScreenState extends State<DashboardScreen>
               const SizedBox(width: 8),
               const Text(
                 'Hari ini',
-                style: TextStyle(color: Color(0xFF4A5C7A), fontSize: 12),
+                style: TextStyle(color: Color(0xFF3A5070), fontSize: 12),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          // Hint shake
+          const SizedBox(height: 12),
+          // Quick Stats Row
           Row(
             children: [
-              const Icon(Icons.vibration, color: Color(0xFF4A5C7A), size: 13),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  'Ketuk ikon mata atau goyangkan HP untuk sembunyikan saldo',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: const Color(0xFF4A5C7A).withOpacity(0.8),
-                    fontSize: 11,
-                    fontStyle: FontStyle.italic,
-                  ),
+              _buildQuickStat('BTC', _assets.where((a) => a.symbol == 'BTC').firstOrNull?.priceUsd),
+              const SizedBox(width: 8),
+              _buildQuickStat('ETH', _assets.where((a) => a.symbol == 'ETH').firstOrNull?.priceUsd),
+              const Spacer(),
+              Flexible(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.vibration_rounded, color: Color(0xFF3A5070), size: 11),
+                    const SizedBox(width: 3),
+                    Flexible(
+                      child: Text(
+                        'Goyangkan untuk sembunyikan',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: const Color(0xFF3A5070).withOpacity(0.9),
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickStat(String symbol, double? price) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            symbol,
+            style: const TextStyle(color: Color(0xFF6C8EBF), fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            price != null ? _formatUsd(price) : '-',
+            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -828,37 +950,28 @@ class _DashboardScreenState extends State<DashboardScreen>
           'TOP ASSETS',
           style: TextStyle(
             color: Colors.white,
-            fontSize: 16,
+            fontSize: 13,
             fontWeight: FontWeight.w800,
-            letterSpacing: 1.2,
+            letterSpacing: 1.5,
           ),
         ),
         Row(
           children: [
-            // Live indicator
             if (!_isLoadingPrices && _priceError == null)
               AnimatedBuilder(
                 animation: _pulseController,
                 builder: (_, __) => Row(
                   children: [
                     Container(
-                      width: 8,
-                      height: 8,
+                      width: 7,
+                      height: 7,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: Color.lerp(
                           const Color(0xFF00E676),
-                          const Color(0xFF00C853).withOpacity(0.3),
+                          const Color(0xFF00C853).withOpacity(0.2),
                           _pulseController.value,
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(
-                              0xFF00E676,
-                            ).withOpacity(0.4 * (1 - _pulseController.value)),
-                            blurRadius: 6,
-                          ),
-                        ],
                       ),
                     ),
                     const SizedBox(width: 5),
@@ -866,9 +979,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                       'LIVE',
                       style: TextStyle(
                         color: Color(0xFF00E676),
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: 1,
+                        letterSpacing: 1.2,
                       ),
                     ),
                   ],
@@ -878,7 +991,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               const SizedBox(width: 10),
               Text(
                 _formatUpdatedTime(_lastUpdatedAt!),
-                style: const TextStyle(color: Color(0xFF4A5C7A), fontSize: 11),
+                style: const TextStyle(color: Color(0xFF3A5070), fontSize: 11),
               ),
             ],
           ],
@@ -896,11 +1009,14 @@ class _DashboardScreenState extends State<DashboardScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(color: Color(0xFF6C63FF)),
-            SizedBox(height: 12),
+            CircularProgressIndicator(
+              color: Color(0xFF6C63FF),
+              strokeWidth: 2,
+            ),
+            SizedBox(height: 16),
             Text(
-              'Mengambil harga real-time...',
-              style: TextStyle(color: Color(0xFF4A5C7A)),
+              'Mengambil data pasar...',
+              style: TextStyle(color: Color(0xFF4A6080), fontSize: 13),
             ),
           ],
         ),
@@ -912,162 +1028,226 @@ class _DashboardScreenState extends State<DashboardScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.wifi_off_rounded,
-              color: Color(0xFF4A5C7A),
-              size: 40,
-            ),
-            const SizedBox(height: 12),
+            Icon(Icons.signal_wifi_statusbar_connected_no_internet_4_rounded,
+                color: const Color(0xFF3A5070), size: 44),
+            const SizedBox(height: 14),
             Text(
               _priceError!,
-              style: const TextStyle(color: Color(0xFF6C8EBF)),
+              style: const TextStyle(color: Color(0xFF6C8EBF), fontSize: 14),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             TextButton.icon(
               onPressed: () => _requestPriceFetch(showLoader: true),
-              icon: const Icon(Icons.refresh, color: Color(0xFF6C63FF)),
-              label: const Text(
-                'Coba lagi',
-                style: TextStyle(color: Color(0xFF6C63FF)),
-              ),
+              icon: const Icon(Icons.refresh_rounded, color: Color(0xFF6C63FF)),
+              label: const Text('Coba lagi', style: TextStyle(color: Color(0xFF6C63FF))),
             ),
           ],
         ),
       );
     }
 
-    return ListView.separated(
+    return ListView.builder(
+      padding: const EdgeInsets.only(top: 4, bottom: 16),
       itemCount: _assets.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, index) => _buildAssetTile(_assets[index]),
+      itemBuilder: (context, index) {
+        // Staggered animation per item
+        return AnimatedBuilder(
+          animation: _cardSlideAnimation,
+          builder: (context, child) {
+            final delay = (index * 0.15).clamp(0.0, 1.0);
+            final animValue = (((_cardSlideAnimation.value - delay) / (1 - delay)).clamp(0.0, 1.0));
+            return Transform.translate(
+              offset: Offset(0, 20 * (1 - animValue)),
+              child: Opacity(opacity: animValue, child: child),
+            );
+          },
+          child: _buildAssetTile(_assets[index]),
+        );
+      },
     );
   }
 
   // ─────────────────────────────────────────────
-  // ASSET TILE dengan flash animasi
+  // ASSET TILE — Mirip Stockbit dengan mini chart
   // ─────────────────────────────────────────────
   Widget _buildAssetTile(_AssetItem asset) {
     final flashColor = _flashColors[asset.symbol];
     final prev = asset.prevPriceUsd;
-    final isUp = prev == null || asset.priceUsd >= prev;
+    final isUp = asset.changePercent >= 0;
 
-    final priceColor = prev == null || prev == asset.priceUsd
-        ? Colors.white
+    // Warna harga berdasarkan flash atau % perubahan
+    final priceColor = flashColor != null
+        ? (flashColor == Colors.greenAccent ? const Color(0xFF00E676) : const Color(0xFFFF5252))
         : (isUp ? const Color(0xFF00E676) : const Color(0xFFFF5252));
 
+    // Sparkline — gunakan dari cache atau data dummy
+    final sparkData = _sparklineCache[asset.pair];
+    final hasChart = sparkData != null && sparkData.length > 2;
+
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.all(16),
+      duration: const Duration(milliseconds: 250),
       decoration: BoxDecoration(
         color: flashColor != null
-            ? flashColor.withOpacity(0.08)
-            : const Color(0xFF111827),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: flashColor != null
-              ? flashColor.withOpacity(0.4)
-              : const Color(0xFF1E2740),
-          width: 1,
+            ? flashColor.withOpacity(0.04)
+            : Colors.transparent,
+        border: Border(
+          bottom: BorderSide(color: const Color(0xFF131929), width: 1),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
-      child: Row(
-        children: [
-          // Avatar
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: _gradientForSymbol(asset.symbol),
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            // ── Avatar ──
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: _gradientForSymbol(asset.symbol),
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(13),
               ),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              asset.symbol.length > 2 ? asset.symbol[0] : asset.symbol,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 14,
+              alignment: Alignment.center,
+              child: Text(
+                asset.symbol.length > 2 ? asset.symbol[0] : asset.symbol,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  letterSpacing: -0.5,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 14),
+            const SizedBox(width: 12),
 
-          // Nama & pair
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  asset.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
+            // ── Nama & Pair ──
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    asset.symbol,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  asset.pair,
-                  style: const TextStyle(
-                    color: Color(0xFF4A5C7A),
-                    fontSize: 12,
+                  const SizedBox(height: 2),
+                  Text(
+                    asset.name,
+                    style: const TextStyle(
+                      color: Color(0xFF4A6080),
+                      fontSize: 12,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    maxLines: 1,
                   ),
-                ),
-              ],
-            ),
-          ),
-
-          // Harga + perubahan
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 300),
-                style: TextStyle(
-                  color: priceColor,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-                child: Text(_formatUsd(asset.priceUsd)),
+                ],
               ),
-              if (prev != null && prev != asset.priceUsd)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isUp ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+            ),
+
+            // ── Mini Chart (Sparkline) ──
+            Expanded(
+              flex: 4,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: SizedBox(
+                  height: 44,
+                  child: hasChart
+                      ? CustomPaint(
+                          painter: _SparklinePainter(
+                            data: sparkData!,
+                            isUp: isUp,
+                          ),
+                        )
+                      : _buildLoadingChart(isUp),
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            // ── Harga & % — lebar tetap agar tidak overflow ──
+            SizedBox(
+              width: 90,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 300),
+                    style: TextStyle(
+                      color: priceColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      letterSpacing: -0.3,
+                    ),
+                    child: Text(
+                      _formatUsd(asset.priceUsd),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
                       color: isUp
-                          ? const Color(0xFF00E676)
-                          : const Color(0xFFFF5252),
-                      size: 16,
+                          ? const Color(0xFF00E676).withOpacity(0.12)
+                          : const Color(0xFFFF5252).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(5),
                     ),
-                    Text(
-                      '\$${(asset.priceUsd - prev).abs().toStringAsFixed(2)}',
-                      style: TextStyle(
-                        color: isUp
-                            ? const Color(0xFF00E676)
-                            : const Color(0xFFFF5252),
-                        fontSize: 11,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Icon(
+                          isUp ? Icons.arrow_drop_up_rounded : Icons.arrow_drop_down_rounded,
+                          color: isUp ? const Color(0xFF00E676) : const Color(0xFFFF5252),
+                          size: 13,
+                        ),
+                        Flexible(
+                          child: Text(
+                            _formatChangePercent(asset.changePercent),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isUp ? const Color(0xFF00E676) : const Color(0xFFFF5252),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-            ],
-          ),
-        ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Chart placeholder saat loading
+  Widget _buildLoadingChart(bool isUp) {
+    return Center(
+      child: LinearProgressIndicator(
+        backgroundColor: const Color(0xFF1A2035),
+        valueColor: AlwaysStoppedAnimation<Color>(
+          isUp
+              ? const Color(0xFF00E676).withOpacity(0.25)
+              : const Color(0xFFFF5252).withOpacity(0.25),
+        ),
       ),
     );
   }
@@ -1075,13 +1255,17 @@ class _DashboardScreenState extends State<DashboardScreen>
   List<Color> _gradientForSymbol(String symbol) {
     switch (symbol.toUpperCase()) {
       case 'BTC':
-        return [const Color(0xFFF7931A), const Color(0xFFFFB74D)];
+        return [const Color(0xFFFF9800), const Color(0xFFFFB74D)];
       case 'ETH':
-        return [const Color(0xFF627EEA), const Color(0xFF3BC8E7)];
+        return [const Color(0xFF627EEA), const Color(0xFF8BA4F7)];
       case 'BNB':
-        return [const Color(0xFFF3BA2F), const Color(0xFFFDD835)];
+        return [const Color(0xFFF3BA2F), const Color(0xFFFFE082)];
       case 'SOL':
-        return [const Color(0xFF9945FF), const Color(0xFF14F195)];
+        return [const Color(0xFF9945FF), const Color(0xFF19FB9B)];
+      case 'XRP':
+        return [const Color(0xFF0F6FDE), const Color(0xFF3BC8E7)];
+      case 'ADA':
+        return [const Color(0xFF0033AD), const Color(0xFF0D6EFF)];
       default:
         return [const Color(0xFF6C63FF), const Color(0xFF3BC8E7)];
     }
