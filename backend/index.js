@@ -161,10 +161,7 @@ app.post('/login', (req, res) => {
     });
 });
 
-// ==========================================
-// 3. ENDPOINT GET HARGA — DARI CACHE
-// Respons instan karena data sudah di-cache
-// ==========================================
+
 app.get('/crypto/prices', (_req, res) => {
     if (!priceCache.updatedAt) {
         // Cache belum siap (baru start), tunggu sebentar lalu coba lagi
@@ -238,9 +235,6 @@ setInterval(() => {
     }
 }, CACHE_TTL_MS);
 
-// ==========================================
-// SERVER START
-// ==========================================
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server Backend TPM berjalan di http://0.0.0.0:${PORT}`);

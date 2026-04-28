@@ -59,6 +59,7 @@ class _AuthGateState extends State<AuthGate> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
+        
         _isAuthenticated = isAuthenticated;
       });
       return;
