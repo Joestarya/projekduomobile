@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'settings_screen.dart';
 
 import 'map_screen.dart';
+import 'gamescreen.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -15,7 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Daftar halaman untuk Bottom Navigation
   static final List<Widget> _widgetOptions = <Widget>[
     DashboardScreen(),
-    AtmFinderScreen(), 
+    AtmFinderScreen(),
     ProfileMenu(), // Menu Profil & Saran Kesan (Wajib Tugas Akhir)
   ];
 
@@ -95,7 +96,10 @@ class ProfileMenu extends StatelessWidget {
           leading: Icon(Icons.videogame_asset),
           title: Text('Mini Game: Crypto Flip'),
           onTap: () {
-            // TODO: Buka mini game
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const GameScreen()),
+            );
           },
         ),
         ListTile(

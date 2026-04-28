@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:sensors_plus/sensors_plus.dart';
 import '../service/api_config.dart';
+import 'gamescreen.dart';
 
 // ─────────────────────────────────────────────
 // MODEL
@@ -30,14 +31,14 @@ class _AssetItem {
   });
 
   _AssetItem copyWithPrev(double prev) => _AssetItem(
-        name: name,
-        symbol: symbol,
-        pair: pair,
-        priceUsd: priceUsd,
-        prevPriceUsd: prev,
-        changePercent: changePercent,
-        sparkline: sparkline,
-      );
+    name: name,
+    symbol: symbol,
+    pair: pair,
+    priceUsd: priceUsd,
+    prevPriceUsd: prev,
+    changePercent: changePercent,
+    sparkline: sparkline,
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -82,7 +83,10 @@ class _SparklinePainter extends CustomPainter {
     for (int i = 0; i < data.length; i++) {
       final x = (i / (data.length - 1)) * size.width;
       final normalized = (data[i] - minVal) / range;
-      final y = size.height - (normalized * size.height * 0.85) - (size.height * 0.075);
+      final y =
+          size.height -
+          (normalized * size.height * 0.85) -
+          (size.height * 0.075);
 
       if (i == 0) {
         path.moveTo(x, y);
@@ -92,7 +96,10 @@ class _SparklinePainter extends CustomPainter {
         // Smooth curve dengan cubic bezier
         final prevX = ((i - 1) / (data.length - 1)) * size.width;
         final prevNorm = (data[i - 1] - minVal) / range;
-        final prevY = size.height - (prevNorm * size.height * 0.85) - (size.height * 0.075);
+        final prevY =
+            size.height -
+            (prevNorm * size.height * 0.85) -
+            (size.height * 0.075);
         final cpX = (prevX + x) / 2;
         path.cubicTo(cpX, prevY, cpX, y, x, y);
         fillPath.cubicTo(cpX, prevY, cpX, y, x, y);
@@ -109,12 +116,9 @@ class _SparklinePainter extends CustomPainter {
     // Titik di ujung kanan (harga sekarang)
     final lastX = size.width;
     final lastNorm = (data.last - minVal) / range;
-    final lastY = size.height - (lastNorm * size.height * 0.85) - (size.height * 0.075);
-    canvas.drawCircle(
-      Offset(lastX, lastY),
-      2.5,
-      Paint()..color = lineColor,
-    );
+    final lastY =
+        size.height - (lastNorm * size.height * 0.85) - (size.height * 0.075);
+    canvas.drawCircle(Offset(lastX, lastY), 2.5, Paint()..color = lineColor);
   }
 
   @override
@@ -153,7 +157,12 @@ const List<_TimezoneOption> _timezones = [
   _TimezoneOption(label: 'CST', city: 'Chicago', offsetHours: -6),
   _TimezoneOption(label: 'PST', city: 'Los Angeles', offsetHours: -8),
   _TimezoneOption(label: 'CET', city: 'Paris', offsetHours: 1),
-  _TimezoneOption(label: 'IST', city: 'Mumbai', offsetHours: 5, offsetMinutes: 30),
+  _TimezoneOption(
+    label: 'IST',
+    city: 'Mumbai',
+    offsetHours: 5,
+    offsetMinutes: 30,
+  ),
   _TimezoneOption(label: 'SGT', city: 'Singapore', offsetHours: 8),
   _TimezoneOption(label: 'JST', city: 'Tokyo', offsetHours: 9),
   _TimezoneOption(label: 'AEST', city: 'Sydney', offsetHours: 10),
@@ -246,7 +255,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ─────────────────────────────────────────────
   void _startClock() {
     _updateClock();
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
+    _clockTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _updateClock(),
+    );
   }
 
   void _updateClock() {
@@ -257,7 +269,20 @@ class _DashboardScreenState extends State<DashboardScreen>
           '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
 
       const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'Mei',
+        'Jun',
+        'Jul',
+        'Agu',
+        'Sep',
+        'Okt',
+        'Nov',
+        'Des',
+      ];
       _dateDisplay =
           '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]} ${now.year}';
     });
@@ -282,7 +307,9 @@ class _DashboardScreenState extends State<DashboardScreen>
     // Coba dari backend dulu, fallback ke Binance langsung
     try {
       // Coba endpoint backend custom
-      final backendUrl = ApiConfig.endpoint('/crypto/klines?symbol=$symbol&interval=1h&limit=24');
+      final backendUrl = ApiConfig.endpoint(
+        '/crypto/klines?symbol=$symbol&interval=1h&limit=24',
+      );
       final resp = await http
           .get(Uri.parse(backendUrl))
           .timeout(const Duration(seconds: 5));
@@ -291,7 +318,9 @@ class _DashboardScreenState extends State<DashboardScreen>
         final json = jsonDecode(resp.body);
         final List<dynamic> klines = json['data'] ?? [];
         if (klines.isNotEmpty) {
-          final prices = klines.map<double>((k) => double.tryParse(k['close'].toString()) ?? 0).toList();
+          final prices = klines
+              .map<double>((k) => double.tryParse(k['close'].toString()) ?? 0)
+              .toList();
           if (mounted) setState(() => _sparklineCache[symbol] = prices);
           return;
         }
@@ -300,7 +329,8 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     // Fallback: langsung ke Binance public API
     try {
-      final binanceUrl = 'https://api.binance.com/api/v3/klines?symbol=$symbol&interval=1h&limit=24';
+      final binanceUrl =
+          'https://api.binance.com/api/v3/klines?symbol=$symbol&interval=1h&limit=24';
       final resp = await http
           .get(Uri.parse(binanceUrl))
           .timeout(const Duration(seconds: 6));
@@ -345,7 +375,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           .get(Uri.parse(ApiConfig.endpoint('/crypto/prices')))
           .timeout(const Duration(seconds: 5));
 
-      if (response.statusCode != 200) throw Exception('HTTP ${response.statusCode}');
+      if (response.statusCode != 200)
+        throw Exception('HTTP ${response.statusCode}');
 
       final Map<String, dynamic> jsonMap = jsonDecode(response.body);
       final List<dynamic> assets = (jsonMap['data'] as List<dynamic>? ?? []);
@@ -358,10 +389,15 @@ class _DashboardScreenState extends State<DashboardScreen>
         final symbol = asset['symbol']?.toString();
         final pair = asset['pair']?.toString();
         final price = num.tryParse(asset['price']?.toString() ?? '');
-        final changePct = num.tryParse(asset['changePercent']?.toString() ?? '0') ?? 0;
-        if (name == null || symbol == null || pair == null || price == null) continue;
+        final changePct =
+            num.tryParse(asset['changePercent']?.toString() ?? '0') ?? 0;
+        if (name == null || symbol == null || pair == null || price == null)
+          continue;
 
-        final prev = _assets.where((a) => a.symbol == symbol).map((a) => a.priceUsd).firstOrNull;
+        final prev = _assets
+            .where((a) => a.symbol == symbol)
+            .map((a) => a.priceUsd)
+            .firstOrNull;
 
         // Ambil sparkline dari cache, pakai pair sebagai key (e.g. BTCUSDT)
         final sparkline = _sparklineCache[pair] ?? [];
@@ -412,7 +448,9 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   void _triggerFlash(String symbol, bool isUp) {
     _flashTimers[symbol]?.cancel();
-    setState(() => _flashColors[symbol] = isUp ? Colors.greenAccent : Colors.redAccent);
+    setState(
+      () => _flashColors[symbol] = isUp ? Colors.greenAccent : Colors.redAccent,
+    );
     _flashTimers[symbol] = Timer(const Duration(milliseconds: 600), () {
       if (mounted) setState(() => _flashColors[symbol] = null);
     });
@@ -424,21 +462,23 @@ class _DashboardScreenState extends State<DashboardScreen>
   void _startShakeDetection() {
     if (kIsWeb ||
         (defaultTargetPlatform != TargetPlatform.android &&
-            defaultTargetPlatform != TargetPlatform.iOS)) return;
+            defaultTargetPlatform != TargetPlatform.iOS))
+      return;
 
-    _accelerometerSubscription = userAccelerometerEvents.listen(
-      (UserAccelerometerEvent event) {
-        final gForce = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
-        if (gForce > 12) {
-          final now = DateTime.now();
-          if (now.difference(_lastShakeTime).inMilliseconds > 1500) {
-            _lastShakeTime = now;
-            setState(() => _isPrivacyMode = !_isPrivacyMode);
-          }
+    _accelerometerSubscription = userAccelerometerEvents.listen((
+      UserAccelerometerEvent event,
+    ) {
+      final gForce = sqrt(
+        event.x * event.x + event.y * event.y + event.z * event.z,
+      );
+      if (gForce > 12) {
+        final now = DateTime.now();
+        if (now.difference(_lastShakeTime).inMilliseconds > 1500) {
+          _lastShakeTime = now;
+          setState(() => _isPrivacyMode = !_isPrivacyMode);
         }
-      },
-      onError: (_) {},
-    );
+      }
+    }, onError: (_) {});
   }
 
   // ─────────────────────────────────────────────
@@ -515,10 +555,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
             const SizedBox(height: 8),
             // Divider
-            Container(
-              height: 1,
-              color: const Color(0xFF1A2035),
-            ),
+            Container(height: 1, color: const Color(0xFF1A2035)),
             // List
             Expanded(child: _buildAssetList()),
           ],
@@ -537,7 +574,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       child: Container(
         decoration: const BoxDecoration(
           color: Color(0xFF0C0F1A),
-          border: Border(bottom: BorderSide(color: Color(0xFF151B2E), width: 1)),
+          border: Border(
+            bottom: BorderSide(color: Color(0xFF151B2E), width: 1),
+          ),
         ),
         child: SafeArea(
           child: Padding(
@@ -559,7 +598,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ),
                         borderRadius: BorderRadius.circular(11),
                       ),
-                      child: const Icon(Icons.currency_bitcoin, color: Colors.white, size: 21),
+                      child: const Icon(
+                        Icons.currency_bitcoin,
+                        color: Colors.white,
+                        size: 21,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Column(
@@ -588,7 +631,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                             const SizedBox(width: 4),
                             const Text(
                               'Live Market',
-                              style: TextStyle(color: Color(0xFF4A6080), fontSize: 11),
+                              style: TextStyle(
+                                color: Color(0xFF4A6080),
+                                fontSize: 11,
+                              ),
                             ),
                           ],
                         ),
@@ -598,6 +644,20 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
                 // Clock
                 Flexible(child: _buildClockWidget(isCompact: isCompact)),
+                // Game button
+                IconButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const GameScreen()),
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.sports_esports_rounded,
+                    color: Color(0xFF9D97FF),
+                    size: 22,
+                  ),
+                ),
               ],
             ),
           ),
@@ -607,90 +667,97 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _buildClockWidget({required bool isCompact}) {
-  return GestureDetector(
-    onTap: _showTimezoneBottomSheet,
-    child: Container(
-      constraints: const BoxConstraints(maxWidth: 180),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), // ⬅️ kecilkan
-      decoration: BoxDecoration(
-        color: const Color(0xFF131929),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1E2D48), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.max, // ⬅️ IMPORTANT
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      _clockDisplay,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15, // ⬅️ sedikit kecil
-                        fontWeight: FontWeight.w700,
-                        fontFeatures: [FontFeature.tabularFigures()],
+    return GestureDetector(
+      onTap: _showTimezoneBottomSheet,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 180),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 8,
+          vertical: 4,
+        ), // ⬅️ kecilkan
+        decoration: BoxDecoration(
+          color: const Color(0xFF131929),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF1E2D48), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.max, // ⬅️ IMPORTANT
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        _clockDisplay,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15, // ⬅️ sedikit kecil
+                          fontWeight: FontWeight.w700,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
                       ),
                     ),
                   ),
-                ),
 
-                if (!isCompact)
-                  Flexible(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            _dateDisplay,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF4A6080),
-                              fontSize: 9, // ⬅️ kecilkan
+                  if (!isCompact)
+                    Flexible(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              _dateDisplay,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF4A6080),
+                                fontSize: 9, // ⬅️ kecilkan
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 3),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6C63FF).withOpacity(0.18),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            _selectedTimezone.label,
-                            style: const TextStyle(
-                              color: Color(0xFF9D97FF),
-                              fontSize: 8, // ⬅️ kecilkan
-                              fontWeight: FontWeight.w700,
+                          const SizedBox(width: 3),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6C63FF).withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              _selectedTimezone.label,
+                              style: const TextStyle(
+                                color: Color(0xFF9D97FF),
+                                fontSize: 8, // ⬅️ kecilkan
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 4),
-          const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: Color(0xFF4A6080),
-            size: 16,
-          ),
-        ],
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Color(0xFF4A6080),
+              size: 16,
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
+
   void _showTimezoneBottomSheet() {
     final screenHeight = MediaQuery.of(context).size.height;
     final sheetHeight = min(screenHeight * 0.75, 520.0);
@@ -720,7 +787,11 @@ class _DashboardScreenState extends State<DashboardScreen>
               const SizedBox(height: 18),
               const Text(
                 'Pilih Zona Waktu',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
               ),
               const SizedBox(height: 8),
               Expanded(
@@ -746,13 +817,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                               : const Color(0xFF131929),
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
-                            color: isSelected ? const Color(0xFF6C63FF) : const Color(0xFF1E2D48),
+                            color: isSelected
+                                ? const Color(0xFF6C63FF)
+                                : const Color(0xFF1E2D48),
                           ),
                         ),
                         child: Text(
                           tz.label,
                           style: TextStyle(
-                            color: isSelected ? const Color(0xFF9D97FF) : const Color(0xFF4A6080),
+                            color: isSelected
+                                ? const Color(0xFF9D97FF)
+                                : const Color(0xFF4A6080),
                             fontWeight: FontWeight.w700,
                             fontSize: 11,
                           ),
@@ -761,17 +836,28 @@ class _DashboardScreenState extends State<DashboardScreen>
                       title: Text(
                         tz.city,
                         style: TextStyle(
-                          color: isSelected ? Colors.white : const Color(0xFFB0BEC5),
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          color: isSelected
+                              ? Colors.white
+                              : const Color(0xFFB0BEC5),
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
                       ),
                       subtitle: Text(
                         'UTC${tz.offsetHours >= 0 ? '+' : ''}${tz.offsetHours}'
                         '${tz.offsetMinutes > 0 ? ':${tz.offsetMinutes.toString().padLeft(2, '0')}' : ''}',
-                        style: const TextStyle(color: Color(0xFF2E4060), fontSize: 12),
+                        style: const TextStyle(
+                          color: Color(0xFF2E4060),
+                          fontSize: 12,
+                        ),
                       ),
                       trailing: isSelected
-                          ? const Icon(Icons.check_circle_rounded, color: Color(0xFF6C63FF), size: 20)
+                          ? const Icon(
+                              Icons.check_circle_rounded,
+                              color: Color(0xFF6C63FF),
+                              size: 20,
+                            )
                           : null,
                     );
                   },
@@ -798,7 +884,10 @@ class _DashboardScreenState extends State<DashboardScreen>
           stops: [0.0, 0.5, 1.0],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF2A3870).withOpacity(0.6), width: 1),
+        border: Border.all(
+          color: const Color(0xFF2A3870).withOpacity(0.6),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF6C63FF).withOpacity(0.12),
@@ -815,7 +904,11 @@ class _DashboardScreenState extends State<DashboardScreen>
             children: [
               const Text(
                 'Total Portofolio',
-                style: TextStyle(color: Color(0xFF7A90B0), fontSize: 13, letterSpacing: 0.5),
+                style: TextStyle(
+                  color: Color(0xFF7A90B0),
+                  fontSize: 13,
+                  letterSpacing: 0.5,
+                ),
               ),
               GestureDetector(
                 onTap: () => setState(() => _isPrivacyMode = !_isPrivacyMode),
@@ -826,7 +919,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
-                    _isPrivacyMode ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                    _isPrivacyMode
+                        ? Icons.visibility_off_rounded
+                        : Icons.visibility_rounded,
                     color: const Color(0xFF7A90B0),
                     size: 17,
                   ),
@@ -853,12 +948,18 @@ class _DashboardScreenState extends State<DashboardScreen>
                 decoration: BoxDecoration(
                   color: const Color(0xFF00C853).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF00C853).withOpacity(0.25)),
+                  border: Border.all(
+                    color: const Color(0xFF00C853).withOpacity(0.25),
+                  ),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.arrow_upward_rounded, color: Color(0xFF00E676), size: 11),
+                    Icon(
+                      Icons.arrow_upward_rounded,
+                      color: Color(0xFF00E676),
+                      size: 11,
+                    ),
                     SizedBox(width: 3),
                     Text(
                       '\$15.30  (+1.6%)',
@@ -882,15 +983,25 @@ class _DashboardScreenState extends State<DashboardScreen>
           // Quick Stats Row
           Row(
             children: [
-              _buildQuickStat('BTC', _assets.where((a) => a.symbol == 'BTC').firstOrNull?.priceUsd),
+              _buildQuickStat(
+                'BTC',
+                _assets.where((a) => a.symbol == 'BTC').firstOrNull?.priceUsd,
+              ),
               const SizedBox(width: 8),
-              _buildQuickStat('ETH', _assets.where((a) => a.symbol == 'ETH').firstOrNull?.priceUsd),
+              _buildQuickStat(
+                'ETH',
+                _assets.where((a) => a.symbol == 'ETH').firstOrNull?.priceUsd,
+              ),
               const Spacer(),
               Flexible(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.vibration_rounded, color: Color(0xFF3A5070), size: 11),
+                    const Icon(
+                      Icons.vibration_rounded,
+                      color: Color(0xFF3A5070),
+                      size: 11,
+                    ),
                     const SizedBox(width: 3),
                     Flexible(
                       child: Text(
@@ -927,12 +1038,20 @@ class _DashboardScreenState extends State<DashboardScreen>
         children: [
           Text(
             symbol,
-            style: const TextStyle(color: Color(0xFF6C8EBF), fontSize: 11, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              color: Color(0xFF6C8EBF),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(width: 5),
           Text(
             price != null ? _formatUsd(price) : '-',
-            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -1009,10 +1128,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(
-              color: Color(0xFF6C63FF),
-              strokeWidth: 2,
-            ),
+            CircularProgressIndicator(color: Color(0xFF6C63FF), strokeWidth: 2),
             SizedBox(height: 16),
             Text(
               'Mengambil data pasar...',
@@ -1028,8 +1144,11 @@ class _DashboardScreenState extends State<DashboardScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.signal_wifi_statusbar_connected_no_internet_4_rounded,
-                color: const Color(0xFF3A5070), size: 44),
+            Icon(
+              Icons.signal_wifi_statusbar_connected_no_internet_4_rounded,
+              color: const Color(0xFF3A5070),
+              size: 44,
+            ),
             const SizedBox(height: 14),
             Text(
               _priceError!,
@@ -1040,7 +1159,10 @@ class _DashboardScreenState extends State<DashboardScreen>
             TextButton.icon(
               onPressed: () => _requestPriceFetch(showLoader: true),
               icon: const Icon(Icons.refresh_rounded, color: Color(0xFF6C63FF)),
-              label: const Text('Coba lagi', style: TextStyle(color: Color(0xFF6C63FF))),
+              label: const Text(
+                'Coba lagi',
+                style: TextStyle(color: Color(0xFF6C63FF)),
+              ),
             ),
           ],
         ),
@@ -1056,7 +1178,11 @@ class _DashboardScreenState extends State<DashboardScreen>
           animation: _cardSlideAnimation,
           builder: (context, child) {
             final delay = (index * 0.15).clamp(0.0, 1.0);
-            final animValue = (((_cardSlideAnimation.value - delay) / (1 - delay)).clamp(0.0, 1.0));
+            final animValue =
+                (((_cardSlideAnimation.value - delay) / (1 - delay)).clamp(
+                  0.0,
+                  1.0,
+                ));
             return Transform.translate(
               offset: Offset(0, 20 * (1 - animValue)),
               child: Opacity(opacity: animValue, child: child),
@@ -1078,7 +1204,9 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     // Warna harga berdasarkan flash atau % perubahan
     final priceColor = flashColor != null
-        ? (flashColor == Colors.greenAccent ? const Color(0xFF00E676) : const Color(0xFFFF5252))
+        ? (flashColor == Colors.greenAccent
+              ? const Color(0xFF00E676)
+              : const Color(0xFFFF5252))
         : (isUp ? const Color(0xFF00E676) : const Color(0xFFFF5252));
 
     // Sparkline — gunakan dari cache atau data dummy
@@ -1198,7 +1326,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ),
                   const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: isUp
                           ? const Color(0xFF00E676).withOpacity(0.12)
@@ -1210,8 +1341,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         Icon(
-                          isUp ? Icons.arrow_drop_up_rounded : Icons.arrow_drop_down_rounded,
-                          color: isUp ? const Color(0xFF00E676) : const Color(0xFFFF5252),
+                          isUp
+                              ? Icons.arrow_drop_up_rounded
+                              : Icons.arrow_drop_down_rounded,
+                          color: isUp
+                              ? const Color(0xFF00E676)
+                              : const Color(0xFFFF5252),
                           size: 13,
                         ),
                         Flexible(
@@ -1220,7 +1355,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: isUp ? const Color(0xFF00E676) : const Color(0xFFFF5252),
+                              color: isUp
+                                  ? const Color(0xFF00E676)
+                                  : const Color(0xFFFF5252),
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                             ),
