@@ -8,19 +8,9 @@ import 'package:sensors_plus/sensors_plus.dart';
 import '../service/api_config.dart';
 import 'gamescreen.dart';
 
-<<<<<<< Updated upstream
 // ─────────────────────────────────────────────
 // MODEL
 // ─────────────────────────────────────────────
-=======
-class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
-
-  @override
-  _DashboardScreenState createState() => _DashboardScreenState();
-}
-
->>>>>>> Stashed changes
 class _AssetItem {
   final String name;
   final String symbol;
@@ -137,48 +127,6 @@ class _SparklinePainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────
-// TIMEZONE DATA
-// ─────────────────────────────────────────────
-class _TimezoneOption {
-  final String label;
-  final String city;
-  final int offsetHours;
-  final int offsetMinutes;
-
-  const _TimezoneOption({
-    required this.label,
-    required this.city,
-    required this.offsetHours,
-    this.offsetMinutes = 0,
-  });
-
-  DateTime now() {
-    final utc = DateTime.now().toUtc();
-    return utc.add(Duration(hours: offsetHours, minutes: offsetMinutes));
-  }
-}
-
-const List<_TimezoneOption> _timezones = [
-  _TimezoneOption(label: 'WIB', city: 'Jakarta', offsetHours: 7),
-  _TimezoneOption(label: 'WITA', city: 'Makassar', offsetHours: 8),
-  _TimezoneOption(label: 'WIT', city: 'Jayapura', offsetHours: 9),
-  _TimezoneOption(label: 'UTC', city: 'London', offsetHours: 0),
-  _TimezoneOption(label: 'EST', city: 'New York', offsetHours: -5),
-  _TimezoneOption(label: 'CST', city: 'Chicago', offsetHours: -6),
-  _TimezoneOption(label: 'PST', city: 'Los Angeles', offsetHours: -8),
-  _TimezoneOption(label: 'CET', city: 'Paris', offsetHours: 1),
-  _TimezoneOption(
-    label: 'IST',
-    city: 'Mumbai',
-    offsetHours: 5,
-    offsetMinutes: 30,
-  ),
-  _TimezoneOption(label: 'SGT', city: 'Singapore', offsetHours: 8),
-  _TimezoneOption(label: 'JST', city: 'Tokyo', offsetHours: 9),
-  _TimezoneOption(label: 'AEST', city: 'Sydney', offsetHours: 10),
-];
-
-// ─────────────────────────────────────────────
 // MAIN SCREEN
 // ─────────────────────────────────────────────
 class DashboardScreen extends StatefulWidget {
@@ -188,77 +136,36 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen>
-    with TickerProviderStateMixin {
+class _DashboardScreenState extends State<DashboardScreen> {
   static const Duration _priceRefreshInterval = Duration(milliseconds: 2000);
   static const Duration _chartRefreshInterval = Duration(minutes: 5);
 
   // ── State ──────────────────────────────────
   bool _isPrivacyMode = false;
-<<<<<<< Updated upstream
   double _totalBalance = 950.0;
-=======
-  final double _totalBalance = 950.0;
->>>>>>> Stashed changes
   bool _isLoadingPrices = true;
   bool _isFetchingPrices = false;
   bool _hasPendingPriceFetch = false;
   String? _priceError;
   String? _lastUpdatedAt;
   List<_AssetItem> _assets = const [];
-  _TimezoneOption _selectedTimezone = _timezones[0];
-  String _clockDisplay = '';
-  String _dateDisplay = '';
 
-<<<<<<< Updated upstream
   // Sparkline data cache per symbol
   final Map<String, List<double>> _sparklineCache = {};
 
   // ── Timers & Subscriptions ─────────────────
   Timer? _priceRefreshTimer;
   Timer? _chartRefreshTimer;
-  Timer? _clockTimer;
   StreamSubscription<UserAccelerometerEvent>? _accelerometerSubscription;
   DateTime _lastShakeTime = DateTime.now();
 
   // ── Animation ─────────────────────────────
-  late AnimationController _pulseController;
-  late AnimationController _cardSlideController;
-  late Animation<double> _cardSlideAnimation;
-  final Map<String, Color?> _flashColors = {};
-  final Map<String, Timer?> _flashTimers = {};
 
   // ─────────────────────────────────────────────
-=======
-  StreamSubscription<UserAccelerometerEvent>? _accelerometerSubscription;
-  DateTime _lastShakeTime = DateTime.now();
-
-  // --- Warna Tema Futuristik ---
-  final Color _bgDark = const Color(0xFF040A18); // Biru sangat gelap
-  final Color _neonBlue = const Color(0xFF00E5FF); // Cyan neon
-  final Color _cardBg = const Color(0xFF0B1930); // Biru panel
-  final Color _textMuted = const Color(0xFF88A4C4); // Biru keabu-abuan
-
->>>>>>> Stashed changes
   @override
   void initState() {
     super.initState();
 
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-
-    _cardSlideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _cardSlideAnimation = CurvedAnimation(
-      parent: _cardSlideController,
-      curve: Curves.easeOutCubic,
-    );
-
-    _startClock();
     _startShakeDetection();
     _requestPriceFetch(showLoader: true);
     _fetchAllSparklines();
@@ -269,54 +176,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _chartRefreshTimer = Timer.periodic(_chartRefreshInterval, (_) {
       _fetchAllSparklines();
     });
-
-    // Animasi masuk
-    Future.delayed(const Duration(milliseconds: 200), () {
-      _cardSlideController.forward();
-    });
-  }
-
-  // ─────────────────────────────────────────────
-  // CLOCK
-  // ─────────────────────────────────────────────
-  void _startClock() {
-    _updateClock();
-    _clockTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => _updateClock(),
-    );
-  }
-
-  void _updateClock() {
-    if (!mounted) return;
-    final now = _selectedTimezone.now();
-    setState(() {
-      _clockDisplay =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
-
-      const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
-      const months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'Mei',
-        'Jun',
-        'Jul',
-        'Agu',
-        'Sep',
-        'Okt',
-        'Nov',
-        'Des',
-      ];
-      _dateDisplay =
-          '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]} ${now.year}';
-    });
-  }
-
-  void _onTimezoneChanged(_TimezoneOption tz) {
-    setState(() => _selectedTimezone = tz);
-    _updateClock();
   }
 
   // ─────────────────────────────────────────────
@@ -438,10 +297,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           sparkline: sparkline,
         );
         nextAssets.add(item);
-
-        if (prev != null && prev != price.toDouble()) {
-          _triggerFlash(symbol, price.toDouble() > prev);
-        }
       }
 
       if (!mounted) return;
@@ -472,16 +327,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  void _triggerFlash(String symbol, bool isUp) {
-    _flashTimers[symbol]?.cancel();
-    setState(
-      () => _flashColors[symbol] = isUp ? Colors.greenAccent : Colors.redAccent,
-    );
-    _flashTimers[symbol] = Timer(const Duration(milliseconds: 600), () {
-      if (mounted) setState(() => _flashColors[symbol] = null);
-    });
-  }
-
   // ─────────────────────────────────────────────
   // SHAKE DETECTION
   // ─────────────────────────────────────────────
@@ -494,7 +339,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _accelerometerSubscription = userAccelerometerEvents.listen((
       UserAccelerometerEvent event,
     ) {
-<<<<<<< Updated upstream
       final gForce = sqrt(
         event.x * event.x + event.y * event.y + event.z * event.z,
       );
@@ -503,19 +347,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         if (now.difference(_lastShakeTime).inMilliseconds > 1500) {
           _lastShakeTime = now;
           setState(() => _isPrivacyMode = !_isPrivacyMode);
-=======
-      double gForce = sqrt(
-        event.x * event.x + event.y * event.y + event.z * event.z,
-      );
-
-      if (gForce > 12) {
-        DateTime now = DateTime.now();
-        if (now.difference(_lastShakeTime).inMilliseconds > 1500) {
-          _lastShakeTime = now;
-          setState(() {
-            _isPrivacyMode = !_isPrivacyMode;
-          });
->>>>>>> Stashed changes
         }
       }
     }, onError: (_) {});
@@ -524,15 +355,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ─────────────────────────────────────────────
   @override
   void dispose() {
-    _pulseController.dispose();
-    _cardSlideController.dispose();
     _priceRefreshTimer?.cancel();
     _chartRefreshTimer?.cancel();
-    _clockTimer?.cancel();
     _accelerometerSubscription?.cancel();
-    for (final t in _flashTimers.values) {
-      t?.cancel();
-    }
     super.dispose();
   }
 
@@ -566,27 +391,15 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-<<<<<<< Updated upstream
     return Scaffold(
-      backgroundColor: const Color(0xFF0C0F1A),
-      appBar: _buildAppBar(),
+      backgroundColor: const Color.fromRGBO(12, 15, 26, 1),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Portfolio Card dengan animasi slide
-            SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, -0.15),
-                end: Offset.zero,
-              ).animate(_cardSlideAnimation),
-              child: FadeTransition(
-                opacity: _cardSlideAnimation,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: _buildPortfolioCard(),
-                ),
-              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: _buildPortfolioCard(),
             ),
             const SizedBox(height: 20),
             // Header
@@ -609,305 +422,32 @@ class _DashboardScreenState extends State<DashboardScreen>
   // APP BAR
   // ─────────────────────────────────────────────
   PreferredSizeWidget _buildAppBar() {
-    final isCompact = MediaQuery.of(context).size.width < 390;
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(68),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF0C0F1A),
-          border: Border(
-            bottom: BorderSide(color: Color(0xFF151B2E), width: 1),
+    return AppBar(
+      backgroundColor: const Color(0xFF0C0F1A),
+      elevation: 0,
+      title: const Text(
+        'Jaga Lilin',
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 16,
+        ),
+      ),
+      actions: [
+        IconButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const GameScreen()),
+            );
+          },
+          icon: const Icon(
+            Icons.sports_esports_rounded,
+            color: Color(0xFF9D97FF),
+            size: 22,
           ),
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Logo
-                Row(
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF6C63FF), Color(0xFF3BC8E7)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: const Icon(
-                        Icons.currency_bitcoin,
-                        color: Colors.white,
-                        size: 21,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          'Jaga Lilin',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 17,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            Container(
-                              width: 5,
-                              height: 5,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Color(0xFF00E676),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Text(
-                              'Live Market',
-                              style: TextStyle(
-                                color: Color(0xFF4A6080),
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                // Clock
-                Flexible(child: _buildClockWidget(isCompact: isCompact)),
-                // Game button
-                IconButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const GameScreen()),
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.sports_esports_rounded,
-                    color: Color(0xFF9D97FF),
-                    size: 22,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClockWidget({required bool isCompact}) {
-    return GestureDetector(
-      onTap: _showTimezoneBottomSheet,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 180),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 8,
-          vertical: 4,
-        ), // ⬅️ kecilkan
-        decoration: BoxDecoration(
-          color: const Color(0xFF131929),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF1E2D48), width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.max, // ⬅️ IMPORTANT
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        _clockDisplay,
-                        maxLines: 1,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15, // ⬅️ sedikit kecil
-                          fontWeight: FontWeight.w700,
-                          fontFeatures: [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  if (!isCompact)
-                    Flexible(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              _dateDisplay,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Color(0xFF4A6080),
-                                fontSize: 9, // ⬅️ kecilkan
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 3),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6C63FF).withOpacity(0.18),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              _selectedTimezone.label,
-                              style: const TextStyle(
-                                color: Color(0xFF9D97FF),
-                                fontSize: 8, // ⬅️ kecilkan
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 4),
-            const Icon(
-              Icons.keyboard_arrow_down_rounded,
-              color: Color(0xFF4A6080),
-              size: 16,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showTimezoneBottomSheet() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final sheetHeight = min(screenHeight * 0.75, 520.0);
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF0F1520),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (_) => SafeArea(
-        top: false,
-        child: SizedBox(
-          height: sheetHeight,
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2A3A5E),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'Pilih Zona Waktu',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  itemCount: _timezones.length,
-                  itemBuilder: (_, index) {
-                    final tz = _timezones[index];
-                    final isSelected = tz.label == _selectedTimezone.label;
-                    return ListTile(
-                      dense: true,
-                      onTap: () {
-                        Navigator.pop(context);
-                        _onTimezoneChanged(tz);
-                      },
-                      leading: Container(
-                        width: 46,
-                        height: 28,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFF6C63FF).withOpacity(0.2)
-                              : const Color(0xFF131929),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF6C63FF)
-                                : const Color(0xFF1E2D48),
-                          ),
-                        ),
-                        child: Text(
-                          tz.label,
-                          style: TextStyle(
-                            color: isSelected
-                                ? const Color(0xFF9D97FF)
-                                : const Color(0xFF4A6080),
-                            fontWeight: FontWeight.w700,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                      title: Text(
-                        tz.city,
-                        style: TextStyle(
-                          color: isSelected
-                              ? Colors.white
-                              : const Color(0xFFB0BEC5),
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
-                      ),
-                      subtitle: Text(
-                        'UTC${tz.offsetHours >= 0 ? '+' : ''}${tz.offsetHours}'
-                        '${tz.offsetMinutes > 0 ? ':${tz.offsetMinutes.toString().padLeft(2, '0')}' : ''}',
-                        style: const TextStyle(
-                          color: Color(0xFF2E4060),
-                          fontSize: 12,
-                        ),
-                      ),
-                      trailing: isSelected
-                          ? const Icon(
-                              Icons.check_circle_rounded,
-                              color: Color(0xFF6C63FF),
-                              size: 20,
-                            )
-                          : null,
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      ],
     );
   }
 
@@ -918,24 +458,9 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1A1060), Color(0xFF0F2055), Color(0xFF091428)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          stops: [0.0, 0.5, 1.0],
-        ),
+        color: const Color(0xFF0F1520),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFF2A3870).withOpacity(0.6),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6C63FF).withOpacity(0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        border: Border.all(color: const Color(0xFF2A3870), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1014,225 +539,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
               const SizedBox(width: 8),
-              const Text(
-                'Hari ini',
-                style: TextStyle(color: Color(0xFF3A5070), fontSize: 12),
-              ),
             ],
           ),
           const SizedBox(height: 12),
-          // Quick Stats Row
-          Row(
-            children: [
-              _buildQuickStat(
-                'BTC',
-                _assets.where((a) => a.symbol == 'BTC').firstOrNull?.priceUsd,
-              ),
-              const SizedBox(width: 8),
-              _buildQuickStat(
-                'ETH',
-                _assets.where((a) => a.symbol == 'ETH').firstOrNull?.priceUsd,
-              ),
-              const Spacer(),
-              Flexible(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.vibration_rounded,
-                      color: Color(0xFF3A5070),
-                      size: 11,
-                    ),
-                    const SizedBox(width: 3),
-                    Flexible(
-                      child: Text(
-                        'Goyangkan untuk sembunyikan',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: const Color(0xFF3A5070).withOpacity(0.9),
-                          fontSize: 10,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+      
         ],
-=======
-    // Dibungkus Scaffold agar background color hitam/biru gelap bisa diterapkan penuh
-    return Scaffold(
-      backgroundColor: _bgDark,
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 40), // SafeArea manual jika tidak dibungkus SafeArea widget
-            // --- KARTU PORTOFOLIO FUTURISTIK ---
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: _cardBg.withOpacity(0.8),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _neonBlue.withOpacity(0.5), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: _neonBlue.withOpacity(0.2),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'SYSTEM BALANCE',
-                        style: TextStyle(
-                          color: _neonBlue,
-                          fontSize: 12,
-                          letterSpacing: 2.0,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: _isPrivacyMode
-                            ? 'Tampilkan saldo'
-                            : 'Sembunyikan saldo',
-                        onPressed: _togglePrivacyMode,
-                        icon: Icon(
-                          _isPrivacyMode
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          color: _neonBlue,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    _isPrivacyMode ? '\$ * * * * * *' : _formatUsd(_totalBalance),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-                  Row(
-                    children: [
-                      Icon(Icons.arrow_drop_up, color: Colors.greenAccent, size: 20),
-                      Text(
-                        '\$15.30 (1.6%)',
-                        style: TextStyle(color: Colors.greenAccent, fontSize: 14, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '24H CYCLE',
-                        style: TextStyle(color: _textMuted, fontSize: 10, letterSpacing: 1.0),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    '> Tapping icon or device movement detected to toggle privacy.',
-                    style: TextStyle(
-                      color: _neonBlue.withOpacity(0.6),
-                      fontSize: 10,
-                      fontFamily: 'Courier', // Menggunakan font bawaan mirip terminal
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 30),
-            
-            // --- HEADER DAFTAR ASET ---
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  'LIVE ASSETS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                if (_lastUpdatedAt != null)
-                  Text(
-                    'SYNC: ${_formatUpdatedTime(_lastUpdatedAt!)}',
-                    style: TextStyle(color: _neonBlue, fontSize: 10, fontFamily: 'Courier'),
-                  ),
-              ],
-            ),
-            const Divider(color: Colors.white24, thickness: 1, height: 20),
-
-            // --- STATUS LOADING / ERROR ---
-            if (_isLoadingPrices)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 12, height: 12,
-                      child: CircularProgressIndicator(color: _neonBlue, strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Establishing secure connection...',
-                      style: TextStyle(color: _textMuted, fontSize: 12, fontFamily: 'Courier'),
-                    ),
-                  ],
-                ),
-              )
-            else if (_priceError != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  '[ERROR] $_priceError',
-                  style: const TextStyle(color: Colors.redAccent, fontFamily: 'Courier'),
-                ),
-              ),
-            
-            const SizedBox(height: 10),
-
-            // --- DAFTAR ASET ---
-            Expanded(
-              child: _assets.isEmpty && !_isLoadingPrices
-                  ? Center(
-                      child: Text(
-                        'NO DATA STREAM DETECTED',
-                        style: TextStyle(color: _textMuted, letterSpacing: 2),
-                      ),
-                    )
-                  : ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: _assets.length,
-                      itemBuilder: (context, index) {
-                        return _buildAssetTile(_assets[index]);
-                      },
-                    ),
-            ),
-          ],
-        ),
->>>>>>> Stashed changes
       ),
     );
   }
 
-<<<<<<< Updated upstream
   Widget _buildQuickStat(String symbol, double? price) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1285,34 +600,27 @@ class _DashboardScreenState extends State<DashboardScreen>
         Row(
           children: [
             if (!_isLoadingPrices && _priceError == null)
-              AnimatedBuilder(
-                animation: _pulseController,
-                builder: (_, __) => Row(
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color.lerp(
-                          const Color(0xFF00E676),
-                          const Color(0xFF00C853).withOpacity(0.2),
-                          _pulseController.value,
-                        ),
-                      ),
+              Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFF00E676),
                     ),
-                    const SizedBox(width: 5),
-                    const Text(
-                      'LIVE',
-                      style: TextStyle(
-                        color: Color(0xFF00E676),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
+                  ),
+                  const SizedBox(width: 5),
+                  const Text(
+                    'LIVE',
+                    style: TextStyle(
+                      color: Color(0xFF00E676),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             if (_lastUpdatedAt != null) ...[
               const SizedBox(width: 10),
@@ -1381,23 +689,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       padding: const EdgeInsets.only(top: 4, bottom: 16),
       itemCount: _assets.length,
       itemBuilder: (context, index) {
-        // Staggered animation per item
-        return AnimatedBuilder(
-          animation: _cardSlideAnimation,
-          builder: (context, child) {
-            final delay = (index * 0.15).clamp(0.0, 1.0);
-            final animValue =
-                (((_cardSlideAnimation.value - delay) / (1 - delay)).clamp(
-                  0.0,
-                  1.0,
-                ));
-            return Transform.translate(
-              offset: Offset(0, 20 * (1 - animValue)),
-              child: Opacity(opacity: animValue, child: child),
-            );
-          },
-          child: _buildAssetTile(_assets[index]),
-        );
+        return _buildAssetTile(_assets[index]);
       },
     );
   }
@@ -1406,30 +698,18 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ASSET TILE — Mirip Stockbit dengan mini chart
   // ─────────────────────────────────────────────
   Widget _buildAssetTile(_AssetItem asset) {
-    final flashColor = _flashColors[asset.symbol];
-    final prev = asset.prevPriceUsd;
     final isUp = asset.changePercent >= 0;
 
     // Warna harga berdasarkan flash atau % perubahan
-    final priceColor = flashColor != null
-        ? (flashColor == Colors.greenAccent
-              ? const Color(0xFF00E676)
-              : const Color(0xFFFF5252))
-        : (isUp ? const Color(0xFF00E676) : const Color(0xFFFF5252));
+    final priceColor = isUp ? const Color(0xFF00E676) : const Color(0xFFFF5252);
 
     // Sparkline — gunakan dari cache atau data dummy
     final sparkData = _sparklineCache[asset.pair];
     final hasChart = sparkData != null && sparkData.length > 2;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      decoration: BoxDecoration(
-        color: flashColor != null
-            ? flashColor.withOpacity(0.04)
-            : Colors.transparent,
-        border: Border(
-          bottom: BorderSide(color: const Color(0xFF131929), width: 1),
-        ),
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFF131929), width: 1)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -1440,11 +720,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: _gradientForSymbol(asset.symbol),
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: _gradientForSymbol(asset.symbol).first,
                 borderRadius: BorderRadius.circular(13),
               ),
               alignment: Alignment.center,
@@ -1516,20 +792,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 300),
+                  Text(
+                    _formatUsd(asset.priceUsd),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
                     style: TextStyle(
                       color: priceColor,
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
                       fontFeatures: const [FontFeature.tabularFigures()],
                       letterSpacing: -0.3,
-                    ),
-                    child: Text(
-                      _formatUsd(asset.priceUsd),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1577,76 +850,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ],
               ),
             ),
-=======
-  // --- WIDGET ASSET TILE FUTURISTIK ---
-  Widget _buildAssetTile(_AssetItem asset) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: _neonBlue.withOpacity(0.7), width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: _neonBlue.withOpacity(0.2),
-                blurRadius: 8,
-              )
-            ],
-          ),
-          child: Center(
-            child: Text(
-              asset.symbol[0],
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-          ),
-        ),
-        title: Text(
-          asset.name,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text(
-          asset.pair,
-          style: TextStyle(color: _textMuted, fontSize: 12),
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              _formatUsd(asset.priceUsd),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 4),
-            // Indikator fiktif untuk menambah kesan UI trading canggih
-            Container(
-              width: 40,
-              height: 2,
-              color: _neonBlue.withOpacity(0.8),
-            )
->>>>>>> Stashed changes
           ],
         ),
       ),
     );
   }
-<<<<<<< Updated upstream
 
   // Chart placeholder saat loading
   Widget _buildLoadingChart(bool isUp) {
@@ -1663,24 +871,19 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   List<Color> _gradientForSymbol(String symbol) {
-    switch (symbol.toUpperCase()) {
-      case 'BTC':
-        return [const Color(0xFFFF9800), const Color(0xFFFFB74D)];
-      case 'ETH':
-        return [const Color(0xFF627EEA), const Color(0xFF8BA4F7)];
-      case 'BNB':
-        return [const Color(0xFFF3BA2F), const Color(0xFFFFE082)];
-      case 'SOL':
-        return [const Color(0xFF9945FF), const Color(0xFF19FB9B)];
-      case 'XRP':
-        return [const Color(0xFF0F6FDE), const Color(0xFF3BC8E7)];
-      case 'ADA':
-        return [const Color(0xFF0033AD), const Color(0xFF0D6EFF)];
-      default:
-        return [const Color(0xFF6C63FF), const Color(0xFF3BC8E7)];
-    }
+    final seed = symbol.codeUnits.fold(0, (sum, c) => sum + c);
+    final rand = Random(seed);
+    final hue = rand.nextInt(360).toDouble();
+    final sat = 0.55 + rand.nextDouble() * 0.35;
+    final light = 0.45 + rand.nextDouble() * 0.18;
+    final base = HSLColor.fromAHSL(1, hue, sat, light).toColor();
+    final altHue = (hue + 40 + rand.nextDouble() * 50) % 360;
+    final alt = HSLColor.fromAHSL(
+      1,
+      altHue,
+      min(1, sat + 0.08),
+      min(1, light + 0.1),
+    ).toColor();
+    return [base, alt];
   }
 }
-=======
-}
->>>>>>> Stashed changes

@@ -31,8 +31,20 @@ class RoundResult {
   });
 
   double get priceDelta => exitPrice - entryPrice;
-  double get priceDeltaPct =>
-      entryPrice == 0 ? 0 : (priceDelta / entryPrice) * 100;
+}
+
+class _GameAsset {
+  final String name;
+  final String symbol;
+  final String pair;
+  final double price;
+
+  const _GameAsset({
+    required this.name,
+    required this.symbol,
+    required this.pair,
+    required this.price,
+  });
 }
 
 // ─────────────────────────────────────────────
@@ -47,7 +59,6 @@ class _CandleChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (candles.isEmpty) return;
-
     final allHigh = candles.map((c) => c['high']!).reduce(max);
     final allLow = candles.map((c) => c['low']!).reduce(min);
     final priceRange = (allHigh - allLow).abs();
@@ -63,7 +74,6 @@ class _CandleChartPainter extends CustomPainter {
     final candleW = (size.width / candles.length) * 0.55;
     final spacing = size.width / candles.length;
 
-    // Entry price dashed line
     if (entryPrice != null) {
       final ey = toY(entryPrice!);
       final dashPaint = Paint()
@@ -84,10 +94,10 @@ class _CandleChartPainter extends CustomPainter {
       final c = candles[i];
       final cx = i * spacing + spacing / 2;
       final isUp = c['close']! >= c['open']!;
-      final bodyColor =
-          isUp ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
+      final bodyColor = isUp
+          ? const Color(0xFF26A69A)
+          : const Color(0xFFEF5350);
 
-      // Wick
       canvas.drawLine(
         Offset(cx, toY(c['high']!)),
         Offset(cx, toY(c['low']!)),
@@ -96,7 +106,6 @@ class _CandleChartPainter extends CustomPainter {
           ..strokeWidth = 1,
       );
 
-      // Body
       final bTop = min(toY(c['open']!), toY(c['close']!));
       final bBot = max(toY(c['open']!), toY(c['close']!));
       canvas.drawRRect(
@@ -118,7 +127,7 @@ class _CandleChartPainter extends CustomPainter {
 // TIMER ARC PAINTER
 // ─────────────────────────────────────────────
 class _TimerArcPainter extends CustomPainter {
-  final double progress; // 1.0 → 0.0 as time runs out
+  final double progress;
 
   const _TimerArcPainter({required this.progress});
 
@@ -136,7 +145,6 @@ class _TimerArcPainter extends CustomPainter {
         ..strokeWidth = 3,
     );
 
-    // Color shifts: teal (full) → amber (mid) → red (low)
     final Color arcColor;
     if (progress > 0.5) {
       arcColor = const Color(0xFF26A69A);
@@ -170,22 +178,10 @@ class _TimerArcPainter extends CustomPainter {
   @override
   bool shouldRepaint(_TimerArcPainter o) => o.progress != progress;
 }
-// ASSET CONFIG
-const List<Map<String, String>> _assets = [
-  {'pair': 'BTCUSDT', 'ticker': 'BTC', 'name': 'Bitcoin'},
-  {'pair': 'ETHUSDT', 'ticker': 'ETH', 'name': 'Ethereum'},
-  {'pair': 'BNBUSDT', 'ticker': 'BNB', 'name': 'BNB'},
-  {'pair': 'SOLUSDT', 'ticker': 'SOL', 'name': 'Solana'},
-];
 
-const Map<String, Color> _assetColors = {
-  'BTCUSDT': Color(0xFFF7931A),
-  'ETHUSDT': Color(0xFF627EEA),
-  'BNBUSDT': Color(0xFFF0B90B),
-  'SOLUSDT': Color(0xFF9945FF),
-};
-
-// MAIN SCREEN
+// ─────────────────────────────────────────────
+// GAME SCREEN
+// ─────────────────────────────────────────────
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
 
@@ -193,79 +189,98 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 
-class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
+class _GameScreenState extends State<GameScreen> {
   static const int _roundSeconds = 60;
 
-  // ── Game state ─────────────────────────────
   GamePhase _phase = GamePhase.idle;
   Prediction? _prediction;
-  String _selectedPair = 'BTCUSDT';
+  String _selectedPair = '';
   double _currentPrice = 0;
   double _entryPrice = 0;
   double _secondsLeft = _roundSeconds.toDouble();
 
-  // ── Stats ──────────────────────────────────
+  // Skor sederhana
   int _totalScore = 0;
-  int _streak = 0;
-  int _bestStreak = 0;
-  int _totalRounds = 0;
-  int _wins = 0;
 
-  // ── Data ───────────────────────────────────
   RoundResult? _lastResult;
   List<Map<String, double>> _candles = [];
-  final List<RoundResult> _history = [];
+  List<_GameAsset> _availableAssets = [];
+  bool _isLoadingAssets = true;
 
-  // ── Timers ─────────────────────────────────
   Timer? _priceTimer;
   Timer? _countdownTimer;
-
-  // ── Animations (minimal) ───────────────────
-  late AnimationController _screenFadeController;
-  late AnimationController _resultFadeController;
-  late Animation<double> _screenFade;
-  late Animation<double> _resultFade;
 
   @override
   void initState() {
     super.initState();
 
-    _screenFadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 280),
+    _fetchAvailableAssets();
+    _priceTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _fetchPrice(),
     );
-    _screenFade =
-        CurvedAnimation(parent: _screenFadeController, curve: Curves.easeOut);
-
-    _resultFadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    _resultFade =
-        CurvedAnimation(parent: _resultFadeController, curve: Curves.easeOut);
-
-    _fetchPrice();
-    _fetchCandles();
-    _priceTimer =
-        Timer.periodic(const Duration(seconds: 2), (_) => _fetchPrice());
-
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _screenFadeController.forward());
   }
 
   @override
   void dispose() {
-    _screenFadeController.dispose();
-    _resultFadeController.dispose();
     _priceTimer?.cancel();
     _countdownTimer?.cancel();
     super.dispose();
   }
 
-  // ─────────────────────────────────────────────
-  // DATA FETCHING
-  // ─────────────────────────────────────────────
+  // ── Data fetching — HANYA dari backend ───────
+  Future<void> _fetchAvailableAssets() async {
+    try {
+      final resp = await http
+          .get(Uri.parse(ApiConfig.endpoint('/crypto/prices')))
+          .timeout(const Duration(seconds: 4));
+      if (resp.statusCode != 200) return;
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final List assets = (body['data'] as List?) ?? [];
+
+      final parsed = assets
+          .map<_GameAsset?>((a) {
+            final name = a['name']?.toString() ?? '';
+            final symbol = a['symbol']?.toString() ?? '';
+            final pair = a['pair']?.toString() ?? '';
+            final price = num.tryParse(a['price']?.toString() ?? '');
+
+            if (name.isEmpty ||
+                symbol.isEmpty ||
+                pair.isEmpty ||
+                price == null) {
+              return null;
+            }
+
+            return _GameAsset(
+              name: name,
+              symbol: symbol,
+              pair: pair,
+              price: price.toDouble(),
+            );
+          })
+          .whereType<_GameAsset>()
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _availableAssets = parsed;
+        _isLoadingAssets = false;
+        if (_selectedPair.isEmpty && parsed.isNotEmpty) {
+          _selectedPair = parsed.first.pair;
+          _fetchPrice();
+          _fetchCandles();
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoadingAssets = false);
+      }
+    }
+  }
+
   Future<void> _fetchPrice() async {
+    if (_selectedPair.isEmpty) return;
     try {
       final resp = await http
           .get(Uri.parse(ApiConfig.endpoint('/crypto/prices')))
@@ -284,46 +299,39 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _fetchCandles() async {
-    final urls = [
-      ApiConfig.endpoint(
-          '/crypto/klines?symbol=$_selectedPair&interval=1m&limit=32'),
-      'https://api.binance.com/api/v3/klines?symbol=$_selectedPair&interval=1m&limit=32',
-    ];
-    for (final url in urls) {
-      try {
-        final resp = await http
-            .get(Uri.parse(url))
-            .timeout(const Duration(seconds: 6));
-        if (resp.statusCode != 200) continue;
-        final body = jsonDecode(resp.body);
-        final List raw = body is Map ? (body['data'] ?? []) : body;
-        final parsed = raw.map<Map<String, double>>((k) {
-          if (k is Map) {
-            return {
-              'open': (k['open'] as num).toDouble(),
-              'high': (k['high'] as num).toDouble(),
-              'low': (k['low'] as num).toDouble(),
-              'close': (k['close'] as num).toDouble(),
-            };
-          }
-          return {
-            'open': double.parse(k[1].toString()),
-            'high': double.parse(k[2].toString()),
-            'low': double.parse(k[3].toString()),
-            'close': double.parse(k[4].toString()),
-          };
-        }).toList();
-        if (mounted) setState(() => _candles = parsed);
-        return;
-      } catch (_) {}
-    }
+    if (_selectedPair.isEmpty) return;
+    try {
+      final url = ApiConfig.endpoint(
+        '/crypto/klines?symbol=$_selectedPair&interval=1m&limit=32',
+      );
+      final resp = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 6));
+      if (resp.statusCode != 200) return;
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final List raw = body['data'] ?? [];
+      final parsed = raw
+          .map<Map<String, double>>((k) {
+            if (k is Map) {
+              return {
+                'open': (k['open'] as num).toDouble(),
+                'high': (k['high'] as num).toDouble(),
+                'low': (k['low'] as num).toDouble(),
+                'close': (k['close'] as num).toDouble(),
+              };
+            }
+            return {};
+          })
+          .where((m) => m.isNotEmpty)
+          .toList();
+      if (mounted) setState(() => _candles = parsed);
+    } catch (_) {}
   }
 
-  // GAME LOGIC
+  // ── Game logic ───────────────────────────────
   void _startRound(Prediction pred) {
     if (_phase != GamePhase.idle || _currentPrice == 0) return;
     HapticFeedback.selectionClick();
-
     setState(() {
       _prediction = pred;
       _phase = GamePhase.active;
@@ -332,8 +340,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     });
 
     _countdownTimer?.cancel();
-    _countdownTimer =
-        Timer.periodic(const Duration(milliseconds: 100), (timer) {
+    _countdownTimer = Timer.periodic(const Duration(milliseconds: 100), (
+      timer,
+    ) {
       if (!mounted) {
         timer.cancel();
         return;
@@ -353,11 +362,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
     final exitPrice = _currentPrice;
     final priceWentUp = exitPrice > _entryPrice;
-    final correct = (_prediction == Prediction.up && priceWentUp) ||
+    final correct =
+        (_prediction == Prediction.up && priceWentUp) ||
         (_prediction == Prediction.down && !priceWentUp);
 
-    final earned = correct ? 100 + (_streak * 20) : 0;
-
+    final earned = correct ? 100 : 0;
     HapticFeedback.lightImpact();
 
     final result = RoundResult(
@@ -372,25 +381,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     setState(() {
       _phase = GamePhase.result;
       _lastResult = result;
-      _totalRounds++;
-      if (correct) {
-        _wins++;
-        _streak++;
-        _bestStreak = max(_bestStreak, _streak);
-        _totalScore += earned;
-      } else {
-        _streak = 0;
-      }
-      _history.insert(0, result);
-      if (_history.length > 20) _history.removeLast();
+      if (correct) _totalScore += earned;
     });
 
-    _resultFadeController.forward(from: 0);
     await _fetchCandles();
   }
 
   void _resetRound() {
-    _resultFadeController.reset();
     setState(() {
       _phase = GamePhase.idle;
       _prediction = null;
@@ -410,9 +407,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _fetchCandles();
   }
 
-  // ─────────────────────────────────────────────
-  // FORMATTING
-  // ─────────────────────────────────────────────
+  // ── Format helpers ───────────────────────────
   String _fmtPrice(double v) {
     if (v == 0) return '—';
     if (v >= 10000) {
@@ -427,112 +422,151 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return '$sign${v.toStringAsFixed(v.abs() < 1 ? 4 : decimals)}';
   }
 
-  double get _accuracy =>
-      _totalRounds == 0 ? 0 : (_wins / _totalRounds * 100);
-
-  // BUILD
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF080B12),
-      body: FadeTransition(
-        opacity: _screenFade,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildHeader(),
-              _buildStatsBar(),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 18),
-                      _buildAssetTabs(),
-                      const SizedBox(height: 12),
-                      _buildPriceTicker(),
-                      const SizedBox(height: 12),
-                      _buildChart(),
-                      const SizedBox(height: 22),
-                      _buildGameSection(),
-                      const SizedBox(height: 28),
-                      if (_history.isNotEmpty) _buildHistory(),
-                      const SizedBox(height: 32),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  List<Color> _gradientForSymbol(String symbol) {
+    final seed = symbol.codeUnits.fold(0, (sum, c) => sum + c);
+    final rand = Random(seed);
+    final hue = rand.nextInt(360).toDouble();
+    final sat = 0.55 + rand.nextDouble() * 0.35;
+    final light = 0.45 + rand.nextDouble() * 0.18;
+    final base = HSLColor.fromAHSL(1, hue, sat, light).toColor();
+    final altHue = (hue + 40 + rand.nextDouble() * 50) % 360;
+    final alt = HSLColor.fromAHSL(
+      1,
+      altHue,
+      min(1, sat + 0.08),
+      min(1, light + 0.1),
+    ).toColor();
+    return [base, alt];
   }
 
-  
-  // HEADER
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      decoration: const BoxDecoration(
-        border:
-            Border(bottom: BorderSide(color: Color(0xFF0E1420), width: 1)),
-      ),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: Color(0xFF3A5070),
-              size: 18,
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final timeZone =
+        'UTC${(now.timeZoneOffset.inHours > 0 ? '+' : '')}${now.timeZoneOffset.inHours}';
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF080B12),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0C1018),
+        elevation: 1,
+        leading: Navigator.of(context).canPop()
+            ? GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: Color(0xFF3A5070),
+                  size: 18,
+                ),
+              )
+            : null,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Market Forecast',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+                letterSpacing: -0.3,
+              ),
             ),
-          ),
-          const SizedBox(width: 14),
-          const Expanded(
+            Text(
+              'Timezone: $timeZone',
+              style: const TextStyle(color: Color(0xFF2A3A5A), fontSize: 9),
+            ),
+          ],
+        ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'Market Forecast',
-                  style: TextStyle(
+                  '$_totalScore',
+                  style: const TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                    letterSpacing: -0.3,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    letterSpacing: -0.5,
                   ),
                 ),
-                Text(
-                  'Practice reading price direction',
-                  style: TextStyle(color: Color(0xFF2A3A5A), fontSize: 11),
+                const Text(
+                  'SCORE',
+                  style: TextStyle(
+                    color: Color(0xFF2A3A5A),
+                    fontSize: 8,
+                    letterSpacing: 1.2,
+                  ),
                 ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 18),
+                    _buildAssetTabs(),
+                    const SizedBox(height: 12),
+                    _buildPriceTicker(),
+                    const SizedBox(height: 12),
+                    _buildChart(),
+                    const SizedBox(height: 22),
+                    if (_phase != GamePhase.idle) _buildGameSection(),
+                    const SizedBox(height: 32),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: _phase == GamePhase.idle
+          ? _buildBottomGameMenu()
+          : null,
+    );
+  }
+
+  // ── Bottom Game Menu ─────────────────────────
+  Widget _buildBottomGameMenu() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFF0E1420), width: 1)),
+        color: Color(0xFF080B12),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'YOUR FORECAST',
+            style: TextStyle(
+              color: Color(0xFF2A3A5A),
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
             children: [
-              Text(
-                '$_totalScore',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 20,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const Text(
-                'SCORE',
-                style: TextStyle(
-                  color: Color(0xFF2A3A5A),
-                  fontSize: 9,
-                  letterSpacing: 1.2,
-                ),
-              ),
+              Expanded(child: _forecastButton(Prediction.up)),
+              const SizedBox(width: 10),
+              Expanded(child: _forecastButton(Prediction.down)),
             ],
           ),
         ],
@@ -540,78 +574,47 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
-  // STATS BAR
-  Widget _buildStatsBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: const BoxDecoration(
-        border:
-            Border(bottom: BorderSide(color: Color(0xFF0A0D15), width: 1)),
-      ),
-      child: Row(
-        children: [
-          _statCell('Accuracy', '${_accuracy.toStringAsFixed(0)}%'),
-          _statDivider(),
-          _statCell(
-            'Streak',
-            '$_streak',
-            valueColor: _streak >= 3
-                ? const Color(0xFF26A69A)
-                : Colors.white,
-          ),
-          _statDivider(),
-          _statCell('Best', '$_bestStreak'),
-          _statDivider(),
-          _statCell('Rounds', '$_totalRounds'),
-        ],
-      ),
-    );
-  }
-
-  Widget _statCell(String label, String value,
-      {Color valueColor = Colors.white}) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(value,
-              style: TextStyle(
-                color: valueColor,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              )),
-          const SizedBox(height: 2),
-          Text(label,
-              style:
-                  const TextStyle(color: Color(0xFF2A3A5A), fontSize: 10)),
-        ],
-      ),
-    );
-  }
-
-  Widget _statDivider() => Container(
-        width: 1,
-        height: 24,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        color: const Color(0xFF0E1420),
-      );
-
-  // ASSET TABS
+  // ── Asset tabs ───────────────────────────────
   Widget _buildAssetTabs() {
+    if (_isLoadingAssets) {
+      return const Center(
+        child: SizedBox(
+          height: 40,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            color: Color(0xFF1A2535),
+          ),
+        ),
+      );
+    }
+
+    if (_availableAssets.isEmpty) {
+      return const Center(
+        child: Text(
+          'No assets available',
+          style: TextStyle(color: Color(0xFF3A5070), fontSize: 12),
+        ),
+      );
+    }
+
     return Row(
-      children: _assets.asMap().entries.map((entry) {
+      children: _availableAssets.asMap().entries.map((entry) {
         final i = entry.key;
-        final a = entry.value;
-        final pair = a['pair']!;
+        final asset = entry.value;
+        final pair = asset.pair;
         final isSelected = pair == _selectedPair;
         final isDisabled = _phase != GamePhase.idle;
-        final accentColor = _assetColors[pair]!;
+        final gradients = _gradientForSymbol(asset.symbol);
+        final accentColor = gradients.first;
 
         return Expanded(
           child: GestureDetector(
             onTap: isDisabled ? null : () => _selectPair(pair),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
-              margin: EdgeInsets.only(right: i < _assets.length - 1 ? 6 : 0),
+              margin: EdgeInsets.only(
+                right: i < _availableAssets.length - 1 ? 6 : 0,
+              ),
               padding: const EdgeInsets.symmetric(vertical: 9),
               decoration: BoxDecoration(
                 color: isSelected
@@ -628,13 +631,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   Text(
-                    a['ticker']!,
+                    asset.symbol,
                     style: TextStyle(
                       color: isSelected
                           ? accentColor
                           : isDisabled
-                              ? const Color(0xFF1A2535)
-                              : const Color(0xFF3A5070),
+                          ? const Color(0xFF1A2535)
+                          : const Color(0xFF3A5070),
                       fontWeight: FontWeight.w700,
                       fontSize: 12,
                     ),
@@ -658,10 +661,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       }).toList(),
     );
   }
-  // PRICE TICKER
+
+  // ── Price ticker ──────────────────────────────
   Widget _buildPriceTicker() {
-    final meta = _assets.firstWhere((a) => a['pair'] == _selectedPair);
-    final accentColor = _assetColors[_selectedPair]!;
+    final asset = _availableAssets.firstWhere(
+      (a) => a.pair == _selectedPair,
+      orElse: () => _availableAssets.isNotEmpty
+          ? _availableAssets.first
+          : _GameAsset(name: '-', symbol: '-', pair: '-', price: 0),
+    );
+    final gradients = _gradientForSymbol(asset.symbol);
+    final accentColor = gradients.first;
     final inRound = _phase == GamePhase.active;
     final delta = inRound ? _currentPrice - _entryPrice : 0.0;
     final isAhead = delta >= 0;
@@ -681,11 +691,14 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             decoration: BoxDecoration(
               color: accentColor.withOpacity(0.08),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: accentColor.withOpacity(0.15), width: 1),
+              border: Border.all(
+                color: accentColor.withOpacity(0.15),
+                width: 1,
+              ),
             ),
             alignment: Alignment.center,
             child: Text(
-              meta['ticker']!,
+              asset.symbol,
               style: TextStyle(
                 color: accentColor,
                 fontWeight: FontWeight.w800,
@@ -697,13 +710,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(meta['name']!,
-                  style: const TextStyle(
-                      color: Color(0xFF3A5070), fontSize: 12)),
               Text(
-                '${meta['ticker']!}/USDT',
-                style: const TextStyle(
-                    color: Color(0xFF1A2535), fontSize: 10),
+                asset.name,
+                style: const TextStyle(color: Color(0xFF3A5070), fontSize: 12),
+              ),
+              Text(
+                '${asset.symbol}/USDT',
+                style: const TextStyle(color: Color(0xFF1A2535), fontSize: 10),
               ),
             ],
           ),
@@ -722,7 +735,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               ),
               if (inRound)
                 Text(
-                  '${isAhead ? "+" : ""}${_fmtDelta(delta)} vs entry',
+                  '${isAhead ? "+" : ""}${_fmtDelta(delta)}',
                   style: TextStyle(
                     color: isAhead
                         ? const Color(0xFF26A69A)
@@ -745,8 +758,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     ),
                     const Text(
                       'Live',
-                      style: TextStyle(
-                          color: Color(0xFF2A3A5A), fontSize: 10),
+                      style: TextStyle(color: Color(0xFF2A3A5A), fontSize: 10),
                     ),
                   ],
                 ),
@@ -756,7 +768,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
-  // CHART
+
+  // ── Chart ─────────────────────────────────────
   Widget _buildChart() {
     return Container(
       height: 130,
@@ -780,22 +793,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   letterSpacing: 1.5,
                 ),
               ),
-              if (_phase == GamePhase.active) ...[
-                const Spacer(),
-                Container(
-                  width: 5,
-                  height: 5,
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Color(0xFF3A5070),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Text(
-                  'Entry line',
-                  style: TextStyle(color: Color(0xFF1A2535), fontSize: 9),
-                ),
-              ],
             ],
           ),
           const SizedBox(height: 6),
@@ -825,11 +822,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
-  // GAME SECTION (routing)
+
+  // ── Game section routing ──────────────────────
   Widget _buildGameSection() {
     switch (_phase) {
       case GamePhase.idle:
-        return _buildIdlePanel();
+        return const SizedBox.shrink();
       case GamePhase.active:
         return _buildActivePanel();
       case GamePhase.resolving:
@@ -838,54 +836,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         return _buildResultPanel();
     }
   }
-  // ── IDLE ──────────────────────────────────
-  Widget _buildIdlePanel() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'YOUR FORECAST',
-          style: TextStyle(
-            color: Color(0xFF2A3A5A),
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.5,
-          ),
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'Where will the price be in 60 seconds?',
-          style: TextStyle(color: Color(0xFF3A5070), fontSize: 13),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(child: _forecastButton(Prediction.up)),
-            const SizedBox(width: 10),
-            Expanded(child: _forecastButton(Prediction.down)),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.info_outline_rounded,
-                size: 11, color: Color(0xFF1A2535)),
-            SizedBox(width: 5),
-            Text(
-              '+100 pts base  ·  +20 pts per streak level',
-              style: TextStyle(color: Color(0xFF1A2535), fontSize: 11),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
 
   Widget _forecastButton(Prediction pred) {
     final isUp = pred == Prediction.up;
-    final color =
-        isUp ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
+    final color = isUp ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
 
     return GestureDetector(
       onTap: () => _startRound(pred),
@@ -927,7 +881,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 Text(
                   isUp ? 'Price goes up' : 'Price goes down',
                   style: const TextStyle(
-                      color: Color(0xFF2A3A5A), fontSize: 11),
+                    color: Color(0xFF2A3A5A),
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -936,56 +892,19 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
-  // ── ACTIVE ─────────────────────────────────
+
+  // ── Active ────────────────────────────────────
   Widget _buildActivePanel() {
     final progress = _secondsLeft / _roundSeconds;
     final isUp = _prediction == Prediction.up;
-    final predColor =
-        isUp ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
+    final predColor = isUp ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
     final delta = _currentPrice - _entryPrice;
     final onTrack = (isUp && delta > 0) || (!isUp && delta < 0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Forecast label
-        Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: predColor.withOpacity(0.04),
-            borderRadius: BorderRadius.circular(8),
-            border:
-                Border.all(color: predColor.withOpacity(0.12), width: 1),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                isUp ? Icons.north_rounded : Icons.south_rounded,
-                color: predColor,
-                size: 14,
-              ),
-              const SizedBox(width: 7),
-              Text(
-                'Forecast: ${isUp ? "Higher" : "Lower"}',
-                style: TextStyle(
-                  color: predColor,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Entry  ${_fmtPrice(_entryPrice)}',
-                style: const TextStyle(
-                    color: Color(0xFF2A3A5A), fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-
-        // Timer row
+        const SizedBox(height: 4),
         Row(
           children: [
             SizedBox(
@@ -1036,9 +955,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      onTrack
-                          ? 'Correct'
-                          : 'Off track',
+                      onTrack ? 'Correct' : 'Off track',
                       style: TextStyle(
                         color: onTrack
                             ? const Color(0xFF26A69A)
@@ -1067,13 +984,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
-          child: const Text('Cancel round',
-              style: TextStyle(fontSize: 12)),
+          child: const Text('Cancel round', style: TextStyle(fontSize: 12)),
         ),
       ],
     );
   }
-  // ── RESOLVING ──────────────────────────────
+
+  // ── Resolving ─────────────────────────────────
   Widget _buildResolvingPanel() {
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: 18),
@@ -1096,139 +1013,124 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
-  // ── RESULT ─────────────────────────────────
+
+  // ── Result ────────────────────────────────────
   Widget _buildResultPanel() {
     final r = _lastResult!;
     final correct = r.isCorrect;
-    final accentColor =
-        correct ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
+    final accentColor = correct
+        ? const Color(0xFF26A69A)
+        : const Color(0xFFEF5350);
     final deltaPct = r.entryPrice == 0
         ? 0.0
         : ((r.exitPrice - r.entryPrice) / r.entryPrice) * 100;
 
-    return FadeTransition(
-      opacity: _resultFade,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Outcome row
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: accentColor.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: accentColor.withOpacity(0.2), width: 1),
-                ),
-                child: Icon(
-                  correct ? Icons.check_rounded : Icons.close_rounded,
-                  color: accentColor,
-                  size: 18,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: accentColor.withOpacity(0.2),
+                  width: 1,
                 ),
               ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    correct
-                        ? 'Correct forecast'
-                        : 'Incorrect forecast',
-                    style: TextStyle(
-                      color: accentColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                  ),
-                  Text(
-                    correct
-                        ? 'Price moved as you predicted'
-                        : 'Price moved in the opposite direction',
-                    style: const TextStyle(
-                        color: Color(0xFF2A3A5A), fontSize: 11),
-                  ),
-                ],
+              child: Icon(
+                correct ? Icons.check_rounded : Icons.close_rounded,
+                color: accentColor,
+                size: 18,
               ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Data table
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0C1018),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: const Color(0xFF0E1420), width: 1),
             ),
-            child: Column(
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _dataRow('Entry price', _fmtPrice(r.entryPrice),
-                    Colors.white),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Divider(color: Color(0xFF0E1420), height: 1),
+                Text(
+                  correct ? 'Correct forecast' : 'Incorrect forecast',
+                  style: TextStyle(
+                    color: accentColor,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
                 ),
-                _dataRow('Exit price', _fmtPrice(r.exitPrice),
-                    Colors.white),
+                Text(
+                  correct
+                      ? 'Price moved as you predicted'
+                      : 'Price moved in the opposite direction',
+                  style: const TextStyle(
+                    color: Color(0xFF2A3A5A),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0C1018),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF0E1420), width: 1),
+          ),
+          child: Column(
+            children: [
+              _dataRow('Exit price', _fmtPrice(r.exitPrice), Colors.white),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Divider(color: Color(0xFF0E1420), height: 1),
+              ),
+              _dataRow(
+                'Price change',
+                '${_fmtDelta(r.priceDelta)} (${deltaPct >= 0 ? "+" : ""}${deltaPct.toStringAsFixed(3)}%)',
+                r.exitPrice >= r.entryPrice
+                    ? const Color(0xFF26A69A)
+                    : const Color(0xFFEF5350),
+              ),
+              if (correct) ...[
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
                   child: Divider(color: Color(0xFF0E1420), height: 1),
                 ),
                 _dataRow(
-                  'Price change',
-                  '${_fmtDelta(r.priceDelta)} (${deltaPct >= 0 ? "+" : ""}${deltaPct.toStringAsFixed(3)}%)',
-                  r.exitPrice >= r.entryPrice
-                      ? const Color(0xFF26A69A)
-                      : const Color(0xFFEF5350),
+                  'Points earned',
+                  '+${r.pointsEarned}',
+                  const Color(0xFF8EA8C0),
                 ),
-                if (correct) ...[
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Divider(color: Color(0xFF0E1420), height: 1),
-                  ),
-                  _dataRow(
-                    _streak > 1
-                        ? 'Points  (×$_streak streak)'
-                        : 'Points earned',
-                    '+${r.pointsEarned}',
-                    const Color(0xFF8EA8C0),
-                  ),
-                ],
               ],
-            ),
+            ],
           ),
-          const SizedBox(height: 14),
-
-          // New round button
-          GestureDetector(
-            onTap: _resetRound,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F1825),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: const Color(0xFF1A2540), width: 1),
-              ),
-              alignment: Alignment.center,
-              child: const Text(
-                'New Round',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
+        ),
+        const SizedBox(height: 14),
+        GestureDetector(
+          onTap: _resetRound,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 13),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F1825),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF1A2540), width: 1),
+            ),
+            alignment: Alignment.center,
+            child: const Text(
+              'New Round',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1236,133 +1138,21 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label,
-            style: const TextStyle(
-                color: Color(0xFF2A3A5A), fontSize: 12)),
-        Text(value,
-            style: TextStyle(
-              color: valueColor,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            )),
+        Text(
+          label,
+          style: const TextStyle(color: Color(0xFF2A3A5A), fontSize: 12),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: valueColor,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
       ],
     );
   }
 
-  // HISTORY
-  Widget _buildHistory() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'ROUND HISTORY',
-              style: TextStyle(
-                color: Color(0xFF2A3A5A),
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.5,
-              ),
-            ),
-            Text(
-              '$_wins of $_totalRounds correct',
-              style: const TextStyle(
-                  color: Color(0xFF1A2535), fontSize: 10),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-
-        // Outcome trail (last 10)
-        Row(
-          children: _history.take(10).toList().reversed.map((r) {
-            final c = r.isCorrect
-                ? const Color(0xFF26A69A)
-                : const Color(0xFFEF5350);
-            return Container(
-              width: 22,
-              height: 22,
-              margin: const EdgeInsets.only(right: 4),
-              decoration: BoxDecoration(
-                color: c.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: c.withOpacity(0.2), width: 1),
-              ),
-              child: Icon(
-                r.isCorrect ? Icons.north_rounded : Icons.south_rounded,
-                color: c,
-                size: 10,
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 10),
-
-        // Recent 5 rows
-        ..._history.take(5).map((r) {
-          final correct = r.isCorrect;
-          final lineColor = correct
-              ? const Color(0xFF26A69A)
-              : const Color(0xFFEF5350);
-          final delta = r.exitPrice - r.entryPrice;
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 5),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0C1018),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                  color: const Color(0xFF0A0D15), width: 1),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 3,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: lineColor.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${_fmtPrice(r.entryPrice)}  →  ${_fmtPrice(r.exitPrice)}',
-                        style: const TextStyle(
-                            color: Color(0xFF3A5070), fontSize: 11),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${r.prediction == Prediction.up ? "Higher" : "Lower"} · '
-                        'Actual ${delta >= 0 ? "+" : ""}${_fmtDelta(delta)}',
-                        style: const TextStyle(
-                            color: Color(0xFF1A2535), fontSize: 10),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  correct ? '+${r.pointsEarned}' : '—',
-                  style: TextStyle(
-                    color: correct
-                        ? const Color(0xFF4A6080)
-                        : const Color(0xFF1A2535),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
+  // ── History ───────────────────────────────────
 }
