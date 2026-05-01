@@ -50,17 +50,7 @@ class SettingsScreen extends StatelessWidget {
                   onTap: () {},
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.qr_code_scanner, color: Color(0xFF638BFF)),
-                  title: const Text('Scan QR Code'),
-                  subtitle: const Text('Pindai kode QR dan simpan', style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12)),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const QRScannerScreen()),
-                    );
-                  },
-                ),
+               
               ],
             ),
           ),

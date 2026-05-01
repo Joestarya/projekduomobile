@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import '../feature/settings_screen.dart';
 import '../feature/gamescreen.dart';
+import '../feature/qr_scanner_screen.dart';
 
 // WIDGET KHUSUS PROFIL & SARAN TPM
 class ProfileMenu extends StatefulWidget {
@@ -115,16 +116,18 @@ class _ProfileMenuState extends State<ProfileMenu> {
           
           },
         ),
-        ListTile(
-          leading: const Icon(Icons.videogame_asset, color: Colors.white),
-          title: const Text('Mini Game: Crypto Flip', style: TextStyle(color: Colors.white)),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const GameScreen()),
-            );
-          },
-        ),
+         ListTile(
+                  leading: const Icon(Icons.qr_code_scanner, color: Color(0xFF638BFF)),
+                  title: const Text('Scan QR Code'),
+                  subtitle: const Text('Pindai kode QR dan simpan', style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12)),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const QRScannerScreen()),
+                 );
+                },
+              ),
+        
         ListTile(
           leading: const Icon(Icons.settings, color: Colors.white),
           title: const Text('Setting', style: TextStyle(color: Colors.white)),
