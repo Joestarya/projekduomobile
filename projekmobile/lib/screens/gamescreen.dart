@@ -434,7 +434,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF080B12),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: FadeTransition(
         opacity: _screenFade,
         child: SafeArea(
@@ -476,9 +476,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border:
-            Border(bottom: BorderSide(color: Color(0xFF0E1420), width: 1)),
+            Border(bottom: BorderSide(color: Theme.of(context).dividerTheme.color ?? Colors.transparent, width: 1)),
       ),
       child: Row(
         children: [
@@ -544,9 +544,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Widget _buildStatsBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border:
-            Border(bottom: BorderSide(color: Color(0xFF0A0D15), width: 1)),
+            Border(bottom: BorderSide(color: Theme.of(context).dividerTheme.color ?? Colors.transparent, width: 1)),
       ),
       child: Row(
         children: [
@@ -592,7 +592,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         width: 1,
         height: 24,
         margin: const EdgeInsets.symmetric(horizontal: 4),
-        color: const Color(0xFF0E1420),
+        color: Theme.of(context).dividerTheme.color,
       );
 
   // ASSET TABS
@@ -616,12 +616,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               decoration: BoxDecoration(
                 color: isSelected
                     ? accentColor.withOpacity(0.07)
-                    : const Color(0xFF0C1018),
+                    : Theme.of(context).cardTheme.color,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: isSelected
                       ? accentColor.withOpacity(0.3)
-                      : const Color(0xFF0E1420),
+                      : Theme.of(context).dividerTheme.color ?? Colors.transparent,
                   width: 1,
                 ),
               ),
@@ -669,9 +669,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF0C1018),
+        color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF0E1420), width: 1),
+        border: Border.all(color: Theme.of(context).dividerTheme.color ?? Colors.transparent, width: 1),
       ),
       child: Row(
         children: [
@@ -762,9 +762,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       height: 130,
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF080B12),
+        color: Theme.of(context).scaffoldBackgroundColor,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF0E1420), width: 1),
+        border: Border.all(color: Theme.of(context).dividerTheme.color ?? Colors.transparent, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

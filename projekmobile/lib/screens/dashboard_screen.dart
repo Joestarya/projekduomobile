@@ -8,19 +8,9 @@ import 'package:sensors_plus/sensors_plus.dart';
 import '../service/api_config.dart';
 import 'gamescreen.dart';
 
-<<<<<<< Updated upstream
 // ─────────────────────────────────────────────
 // MODEL
 // ─────────────────────────────────────────────
-=======
-class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
-
-  @override
-  _DashboardScreenState createState() => _DashboardScreenState();
-}
-
->>>>>>> Stashed changes
 class _AssetItem {
   final String name;
   final String symbol;
@@ -195,11 +185,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ── State ──────────────────────────────────
   bool _isPrivacyMode = false;
-<<<<<<< Updated upstream
   double _totalBalance = 950.0;
-=======
-  final double _totalBalance = 950.0;
->>>>>>> Stashed changes
   bool _isLoadingPrices = true;
   bool _isFetchingPrices = false;
   bool _hasPendingPriceFetch = false;
@@ -210,7 +196,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   String _clockDisplay = '';
   String _dateDisplay = '';
 
-<<<<<<< Updated upstream
   // Sparkline data cache per symbol
   final Map<String, List<double>> _sparklineCache = {};
 
@@ -229,17 +214,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   final Map<String, Timer?> _flashTimers = {};
 
   // ─────────────────────────────────────────────
-=======
-  StreamSubscription<UserAccelerometerEvent>? _accelerometerSubscription;
-  DateTime _lastShakeTime = DateTime.now();
-
-  // --- Warna Tema Futuristik ---
-  final Color _bgDark = const Color(0xFF040A18); // Biru sangat gelap
-  final Color _neonBlue = const Color(0xFF00E5FF); // Cyan neon
-  final Color _cardBg = const Color(0xFF0B1930); // Biru panel
-  final Color _textMuted = const Color(0xFF88A4C4); // Biru keabu-abuan
-
->>>>>>> Stashed changes
   @override
   void initState() {
     super.initState();
@@ -494,7 +468,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _accelerometerSubscription = userAccelerometerEvents.listen((
       UserAccelerometerEvent event,
     ) {
-<<<<<<< Updated upstream
       final gForce = sqrt(
         event.x * event.x + event.y * event.y + event.z * event.z,
       );
@@ -503,19 +476,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         if (now.difference(_lastShakeTime).inMilliseconds > 1500) {
           _lastShakeTime = now;
           setState(() => _isPrivacyMode = !_isPrivacyMode);
-=======
-      double gForce = sqrt(
-        event.x * event.x + event.y * event.y + event.z * event.z,
-      );
-
-      if (gForce > 12) {
-        DateTime now = DateTime.now();
-        if (now.difference(_lastShakeTime).inMilliseconds > 1500) {
-          _lastShakeTime = now;
-          setState(() {
-            _isPrivacyMode = !_isPrivacyMode;
-          });
->>>>>>> Stashed changes
         }
       }
     }, onError: (_) {});
@@ -566,9 +526,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-<<<<<<< Updated upstream
     return Scaffold(
-      backgroundColor: const Color(0xFF0C0F1A),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: _buildAppBar(),
       body: SafeArea(
         child: Column(
@@ -596,7 +555,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
             const SizedBox(height: 8),
             // Divider
-            Container(height: 1, color: const Color(0xFF1A2035)),
+            Container(height: 1, color: Theme.of(context).dividerTheme.color),
             // List
             Expanded(child: _buildAssetList()),
           ],
@@ -613,10 +572,10 @@ class _DashboardScreenState extends State<DashboardScreen>
     return PreferredSize(
       preferredSize: const Size.fromHeight(68),
       child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF0C0F1A),
+        decoration: BoxDecoration(
+          color: Theme.of(context).appBarTheme.backgroundColor,
           border: Border(
-            bottom: BorderSide(color: Color(0xFF151B2E), width: 1),
+            bottom: BorderSide(color: Theme.of(context).dividerTheme.color ?? Colors.transparent, width: 1),
           ),
         ),
         child: SafeArea(
@@ -632,11 +591,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF6C63FF), Color(0xFF3BC8E7)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                        color: Theme.of(context).primaryColor,
                         borderRadius: BorderRadius.circular(11),
                       ),
                       child: const Icon(
@@ -670,10 +625,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                               ),
                             ),
                             const SizedBox(width: 4),
-                            const Text(
+                            Text(
                               'Live Market',
                               style: TextStyle(
-                                color: Color(0xFF4A6080),
+                                color: Theme.of(context).colorScheme.primary,
                                 fontSize: 11,
                               ),
                             ),
@@ -693,9 +648,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                       MaterialPageRoute(builder: (_) => const GameScreen()),
                     );
                   },
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.sports_esports_rounded,
-                    color: Color(0xFF9D97FF),
+                    color: Theme.of(context).colorScheme.primary,
                     size: 22,
                   ),
                 ),
@@ -715,11 +670,11 @@ class _DashboardScreenState extends State<DashboardScreen>
         padding: const EdgeInsets.symmetric(
           horizontal: 8,
           vertical: 4,
-        ), // ⬅️ kecilkan
+        ),
         decoration: BoxDecoration(
-          color: const Color(0xFF131929),
+          color: Theme.of(context).cardTheme.color,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF1E2D48), width: 1),
+          border: Border.all(color: Theme.of(context).dividerTheme.color ?? Colors.transparent, width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -805,7 +760,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF0F1520),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
@@ -918,15 +873,15 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1A1060), Color(0xFF0F2055), Color(0xFF091428)],
+        gradient: LinearGradient(
+          colors: [Theme.of(context).primaryColor.withOpacity(0.8), Theme.of(context).cardTheme.color!],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          stops: [0.0, 0.5, 1.0],
+          stops: const [0.0, 1.0],
         ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0xFF2A3870).withOpacity(0.6),
+          color: Theme.of(context).dividerTheme.color ?? Colors.transparent,
           width: 1,
         ),
         boxShadow: [
@@ -1062,177 +1017,10 @@ class _DashboardScreenState extends State<DashboardScreen>
             ],
           ),
         ],
-=======
-    // Dibungkus Scaffold agar background color hitam/biru gelap bisa diterapkan penuh
-    return Scaffold(
-      backgroundColor: _bgDark,
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 40), // SafeArea manual jika tidak dibungkus SafeArea widget
-            // --- KARTU PORTOFOLIO FUTURISTIK ---
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: _cardBg.withOpacity(0.8),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _neonBlue.withOpacity(0.5), width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: _neonBlue.withOpacity(0.2),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'SYSTEM BALANCE',
-                        style: TextStyle(
-                          color: _neonBlue,
-                          fontSize: 12,
-                          letterSpacing: 2.0,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: _isPrivacyMode
-                            ? 'Tampilkan saldo'
-                            : 'Sembunyikan saldo',
-                        onPressed: _togglePrivacyMode,
-                        icon: Icon(
-                          _isPrivacyMode
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          color: _neonBlue,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    _isPrivacyMode ? '\$ * * * * * *' : _formatUsd(_totalBalance),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-                  Row(
-                    children: [
-                      Icon(Icons.arrow_drop_up, color: Colors.greenAccent, size: 20),
-                      Text(
-                        '\$15.30 (1.6%)',
-                        style: TextStyle(color: Colors.greenAccent, fontSize: 14, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '24H CYCLE',
-                        style: TextStyle(color: _textMuted, fontSize: 10, letterSpacing: 1.0),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    '> Tapping icon or device movement detected to toggle privacy.',
-                    style: TextStyle(
-                      color: _neonBlue.withOpacity(0.6),
-                      fontSize: 10,
-                      fontFamily: 'Courier', // Menggunakan font bawaan mirip terminal
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 30),
-            
-            // --- HEADER DAFTAR ASET ---
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  'LIVE ASSETS',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                if (_lastUpdatedAt != null)
-                  Text(
-                    'SYNC: ${_formatUpdatedTime(_lastUpdatedAt!)}',
-                    style: TextStyle(color: _neonBlue, fontSize: 10, fontFamily: 'Courier'),
-                  ),
-              ],
-            ),
-            const Divider(color: Colors.white24, thickness: 1, height: 20),
-
-            // --- STATUS LOADING / ERROR ---
-            if (_isLoadingPrices)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 12, height: 12,
-                      child: CircularProgressIndicator(color: _neonBlue, strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Establishing secure connection...',
-                      style: TextStyle(color: _textMuted, fontSize: 12, fontFamily: 'Courier'),
-                    ),
-                  ],
-                ),
-              )
-            else if (_priceError != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  '[ERROR] $_priceError',
-                  style: const TextStyle(color: Colors.redAccent, fontFamily: 'Courier'),
-                ),
-              ),
-            
-            const SizedBox(height: 10),
-
-            // --- DAFTAR ASET ---
-            Expanded(
-              child: _assets.isEmpty && !_isLoadingPrices
-                  ? Center(
-                      child: Text(
-                        'NO DATA STREAM DETECTED',
-                        style: TextStyle(color: _textMuted, letterSpacing: 2),
-                      ),
-                    )
-                  : ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: _assets.length,
-                      itemBuilder: (context, index) {
-                        return _buildAssetTile(_assets[index]);
-                      },
-                    ),
-            ),
-          ],
-        ),
->>>>>>> Stashed changes
       ),
     );
   }
 
-<<<<<<< Updated upstream
   Widget _buildQuickStat(String symbol, double? price) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1428,7 +1216,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             ? flashColor.withOpacity(0.04)
             : Colors.transparent,
         border: Border(
-          bottom: BorderSide(color: const Color(0xFF131929), width: 1),
+          bottom: BorderSide(color: Theme.of(context).dividerTheme.color ?? Colors.transparent, width: 1),
         ),
       ),
       child: Padding(
@@ -1577,76 +1365,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ],
               ),
             ),
-=======
-  // --- WIDGET ASSET TILE FUTURISTIK ---
-  Widget _buildAssetTile(_AssetItem asset) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: _neonBlue.withOpacity(0.7), width: 1.5),
-            boxShadow: [
-              BoxShadow(
-                color: _neonBlue.withOpacity(0.2),
-                blurRadius: 8,
-              )
-            ],
-          ),
-          child: Center(
-            child: Text(
-              asset.symbol[0],
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-          ),
-        ),
-        title: Text(
-          asset.name,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text(
-          asset.pair,
-          style: TextStyle(color: _textMuted, fontSize: 12),
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              _formatUsd(asset.priceUsd),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 4),
-            // Indikator fiktif untuk menambah kesan UI trading canggih
-            Container(
-              width: 40,
-              height: 2,
-              color: _neonBlue.withOpacity(0.8),
-            )
->>>>>>> Stashed changes
           ],
         ),
       ),
     );
   }
-<<<<<<< Updated upstream
 
   // Chart placeholder saat loading
   Widget _buildLoadingChart(bool isUp) {
@@ -1681,6 +1404,3 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 }
-=======
-}
->>>>>>> Stashed changes

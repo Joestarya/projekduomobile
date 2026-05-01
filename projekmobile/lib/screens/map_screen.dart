@@ -39,18 +39,18 @@ class AtmNode {
 //  THEME CONSTANTS  (Warm Earth / Terracotta)
 // ─────────────────────────────────────────────
 class AppTheme {
-  static const bg          = Color(0xFF1A1612);
-  static const surface     = Color(0xFF242018);
-  static const surfaceHigh = Color(0xFF2E2920);
-  static const border      = Color(0xFF3D3528);
-  static const accent      = Color(0xFFE8A045);   // warm amber
-  static const accentSoft  = Color(0xFF8B5E2A);
-  static const atmColor    = Color(0xFF4ECDC4);   // teal
-  static const bankColor   = Color(0xFFFFD166);   // gold
+  static const bg          = Color(0xFF1E2738);
+  static const surface     = Color(0xFF283548);
+  static const surfaceHigh = Color(0xFF324158);
+  static const border      = Color(0xFF3E4F6A);
+  static const accent      = Color(0xFF638BFF);   // soft blue
+  static const accentSoft  = Color(0xFF4FA0FF);
+  static const atmColor    = Color(0xFF638BFF);   // soft blue
+  static const bankColor   = Color(0xFF8B9BB4);   // slate
   static const userColor   = Color(0xFFFF6B6B);   // coral
-  static const textPrimary = Color(0xFFF0EBE0);
-  static const textMuted   = Color(0xFF7A6F60);
-  static const textDim     = Color(0xFF4A4035);
+  static const textPrimary = Colors.white;
+  static const textMuted   = Color(0xFF8B9BB4);
+  static const textDim     = Color(0xFF6A7B96);
 }
 
 // ─────────────────────────────────────────────

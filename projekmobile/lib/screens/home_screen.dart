@@ -32,16 +32,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Jaga Lilin'),
-        titleTextStyle: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          color: const Color.fromARGB(255, 224, 222, 222),
-        ),
-        backgroundColor: Colors.indigo,
+        title: const Text('Jaga Lilin'),
         actions: [
           IconButton(
-            icon: Icon(Icons.currency_exchange),
+            icon: const Icon(Icons.currency_exchange),
             onPressed: () {
               // TODO: Navigasi ke Konverter Mata Uang
             },
@@ -56,7 +50,6 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
         currentIndex: _selectedIndex,
-        selectedItemColor: Colors.indigo,
         onTap: _onItemTapped,
       ),
     );
@@ -70,50 +63,59 @@ class ProfileMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       children: [
-        CircleAvatar(
+        const CircleAvatar(
           radius: 50,
+          backgroundColor: Color(0xFF283548),
           backgroundImage: NetworkImage(
             'https://via.placeholder.com/150',
           ), // Placeholder gambar profil
         ),
-        SizedBox(height: 16),
-        Center(
+        const SizedBox(height: 16),
+        const Center(
           child: Text(
             'User',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
           ),
         ),
-        Divider(),
-        ListTile(
-          leading: Icon(Icons.feedback),
-          title: Text('Saran & Kesan Kuliah TPM'),
-          subtitle: Text('Beri masukan untuk mata kuliah ini'),
-          onTap: () {
-            // TODO: Buka form saran
-          },
-        ),
-        ListTile(
-          leading: Icon(Icons.videogame_asset),
-          title: Text('Mini Game: Crypto Flip'),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const GameScreen()),
-            );
-          },
-        ),
-        ListTile(
-          leading: Icon(Icons.settings),
-          title: Text('Setting'),
-          subtitle: Text('Pengaturan aplikasi'),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SettingsScreen()),
-            );
-          },
+        const SizedBox(height: 24),
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.feedback, color: Color(0xFF638BFF)),
+                title: const Text('Saran & Kesan Kuliah TPM'),
+                subtitle: const Text('Beri masukan untuk mata kuliah ini', style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12)),
+                onTap: () {
+                  // TODO: Buka form saran
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.videogame_asset, color: Color(0xFF638BFF)),
+                title: const Text('Mini Game: Crypto Flip'),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const GameScreen()),
+                  );
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.settings, color: Color(0xFF638BFF)),
+                title: const Text('Setting'),
+                subtitle: const Text('Pengaturan aplikasi', style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12)),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ],
     );

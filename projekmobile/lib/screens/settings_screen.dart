@@ -23,42 +23,47 @@ class SettingsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Setting'),
-        backgroundColor: Colors.indigo,
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         children: [
           const Text(
-            'Setting',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            'Preferences',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF8B9BB4)),
           ),
           const SizedBox(height: 12),
           Card(
-            child: ListTile(
-              leading: const Icon(Icons.notifications_outlined),
-              title: const Text('Notifikasi'),
-              subtitle: const Text('Atur pengingat dan notifikasi aplikasi'),
-              onTap: () {},
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.notifications_outlined, color: Color(0xFF638BFF)),
+                  title: const Text('Notifikasi'),
+                  subtitle: const Text('Atur pengingat dan notifikasi aplikasi', style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12)),
+                  onTap: () {},
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.lock_outline, color: Color(0xFF638BFF)),
+                  title: const Text('Privasi'),
+                  subtitle: const Text('Kelola preferensi privasi akun', style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12)),
+                  onTap: () {},
+                ),
+              ],
             ),
           ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.lock_outline),
-              title: const Text('Privasi'),
-              subtitle: const Text('Kelola preferensi privasi akun'),
-              onTap: () {},
-            ),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           ElevatedButton.icon(
             onPressed: () => _logout(context),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: const Color(0xFFEF5350),
               foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(52),
+              minimumSize: const Size.fromHeight(56),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             icon: const Icon(Icons.logout),
-            label: const Text('Logout'),
+            label: const Text('Logout', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

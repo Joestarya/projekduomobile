@@ -203,82 +203,81 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Column(
-              children: [
-                Image.asset(
-                  'assets/login.png',
-                  width: 150,
-                  height: 150,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Icon(Icons.person, size: 100);
-                  },
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Icon(Icons.lock_person_rounded, size: 80, color: Theme.of(context).primaryColor),
+              const SizedBox(height: 24),
+              const Text(
+                'Welcome Back',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Login to continue',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Color(0xFF8B9BB4)),
+              ),
+              const SizedBox(height: 40),
+              TextField(
+                controller: _usernameController,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF8B9BB4)),
                 ),
-              ],
-            ),
-            const Text(
-              'Login',
-              style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _usernameController,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                border: OutlineInputBorder(),
               ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  prefixIcon: Icon(Icons.lock_outline, color: Color(0xFF8B9BB4)),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => RegisterScreen()),
-                );
-              },
-              child: const Text('Belum punya akun? Signup'),
-            ),
-            const SizedBox(height: 20),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _login,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(250, 60),
+              const SizedBox(height: 32),
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ElevatedButton(
+                      onPressed: _login,
+                      child: const Text('Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
-                    child: const Text('Login'),
-                  ),
-            if (_showBiometricLogin) ...[
-              const SizedBox(height: 12),
-              _isBiometricLoading
-                  ? const CircularProgressIndicator()
-                  : OutlinedButton.icon(
-                      onPressed: _loginWithBiometric,
-                      icon: const Icon(Icons.fingerprint),
-                      label: const Text('Login dengan Fingerprint/Face'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(250, 56),
+              if (_showBiometricLogin) ...[
+                const SizedBox(height: 16),
+                _isBiometricLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : OutlinedButton.icon(
+                        onPressed: _loginWithBiometric,
+                        icon: const Icon(Icons.fingerprint),
+                        label: const Text('Login dengan Biometrik'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF638BFF),
+                          side: const BorderSide(color: Color(0xFF638BFF)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
                       ),
-                    ),
+              ],
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                  );
+                },
+                child: const Text('Belum punya akun? Daftar', style: TextStyle(color: Color(0xFF638BFF))),
+              ),
             ],
-          ],
+          ),
         ),
       ),
     );
