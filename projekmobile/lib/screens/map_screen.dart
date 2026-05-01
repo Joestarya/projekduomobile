@@ -956,7 +956,7 @@ out center tags;
   // ── LOADING OVERLAY ───────────────────────
   Widget _buildLoadingOverlay() {
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 60,
+      top: MediaQuery.of(context).padding.top + 300,
       left: 0, right: 0,
       child: Center(
         child: Container(
