@@ -4,7 +4,9 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 require('dotenv').config({ override: true });
 const db = require('./db');
-
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_URL =
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -179,31 +181,6 @@ setInterval(() => {
 // ==========================================
 // 1. ENDPOINT REGISTER
 // ==========================================
-// ADD qr_data COLUMN IF NOT EXISTS
-db.query("ALTER TABLE users ADD COLUMN qr_data TEXT DEFAULT NULL", (err) => {
-    if (err && err.code !== 'ER_DUP_FIELDNAME') {
-        console.error("Gagal menambah kolom qr_data:", err);
-    }
-});
-
-app.post('/qr-scan', (req, res) => {
-    const { username, qr_data } = req.body;
-    if (!username || !qr_data) {
-        return res.status(400).json({ message: 'Username dan Data QR tidak boleh kosong' });
-    }
-    
-    const query = 'UPDATE users SET qr_data = ? WHERE username = ?';
-    db.query(query, [qr_data, username], (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (results.affectedRows === 0) {
-            return res.status(404).json({ message: 'User tidak ditemukan' });
-        }
-        res.status(200).json({ message: 'Data QR berhasil disimpan' });
-    });
-});
-
 app.post('/register', async (req, res) => {
     const { username, password, full_name } = req.body;
 
@@ -264,6 +241,118 @@ app.post('/login', (req, res) => {
     });
 });
 
+app.post('/crypto/predict', async (req, res) => {
+    if (!GEMINI_API_KEY) {
+        return res.status(500).json({ message: 'GEMINI_API_KEY belum diset di .env' });
+    }
+ 
+    const pair = (req.body.pair || 'BTCUSDT').toUpperCase();
+    const validPairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT'];
+ 
+    if (!validPairs.includes(pair)) {
+        return res.status(400).json({ message: `Pair tidak valid. Gunakan: ${validPairs.join(', ')}` });
+    }
+ 
+    try {
+        // 1. Ambil harga terkini dari cache
+        const priceData = priceCache.data.find((d) => d.pair === pair);
+        if (!priceData) {
+            return res.status(503).json({ message: 'Data harga belum tersedia, coba lagi.' });
+        }
+ 
+        // 2. Ambil kline 15 candle terakhir (1m interval)
+        const klines = await refreshKlineCache(pair, '1m', 15);
+        const recentCloses = klines.map((k) => k.close.toFixed(4)).join(', ');
+        const recentVolumes = klines.map((k) => k.volume.toFixed(2)).join(', ');
+ 
+        // 3. Hitung momentum sederhana dari kline
+        const lastClose = klines[klines.length - 1]?.close ?? priceData.price;
+        const firstClose = klines[0]?.close ?? priceData.price;
+        const momentum = lastClose - firstClose;
+ 
+        // 4. Buat prompt untuk Gemini
+        const prompt = `You are a short-term crypto price direction analyst.
+ 
+Analyze the following market data for ${pair} and predict whether the price will go UP or DOWN in the next 60 seconds.
+ 
+## Current Market Data
+- Pair: ${pair}
+- Current Price: $${priceData.price.toFixed(4)}
+- 24h Change: ${priceData.changePercent.toFixed(2)}%
+- 24h High: $${priceData.high24h.toFixed(4)}
+- 24h Low: $${priceData.low24h.toFixed(4)}
+- 24h Volume: ${priceData.volume24h.toFixed(2)}
+ 
+## Last 15 Minutes (1m candle close prices)
+${recentCloses}
+ 
+## Last 15 Minutes (1m volumes)
+${recentVolumes}
+ 
+## Calculated Momentum (15m)
+Price change over last 15 candles: ${momentum >= 0 ? '+' : ''}${momentum.toFixed(4)}
+ 
+## Instructions
+Based on the data above:
+1. Determine if price will go UP or DOWN in the next 60 seconds
+2. Rate your confidence: HIGH, MEDIUM, or LOW
+3. Give a very short reasoning (max 2 sentences, in Indonesian)
+ 
+Respond ONLY in this exact JSON format (no markdown, no extra text):
+{"direction":"UP","confidence":"MEDIUM","reasoning":"Momentum 15 menit terakhir positif dengan volume meningkat. Harga berpotensi melanjutkan kenaikan jangka pendek."}`;
+ 
+        // 5. Kirim ke Gemini API
+        const geminiResp = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.3,        // rendah = lebih konsisten
+                    maxOutputTokens: 200,
+                },
+            }),
+        });
+ 
+        if (!geminiResp.ok) {
+            const errText = await geminiResp.text();
+            console.error('[Gemini] API error:', errText);
+            return res.status(502).json({ message: 'Gemini API error', detail: errText });
+        }
+ 
+        const geminiData = await geminiResp.json();
+ 
+        // 6. Parse response Gemini
+        const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        let prediction;
+        try {
+            // Bersihkan kalau ada markdown code block
+            const cleaned = rawText.replace(/```json|```/g, '').trim();
+            prediction = JSON.parse(cleaned);
+        } catch (_) {
+            console.error('[Gemini] Parse error, raw:', rawText);
+            return res.status(502).json({ message: 'Gagal parse response Gemini', raw: rawText });
+        }
+ 
+        // 7. Validasi direction
+        if (!['UP', 'DOWN'].includes(prediction.direction)) {
+            return res.status(502).json({ message: 'Direction tidak valid dari Gemini', raw: rawText });
+        }
+ 
+        res.json({
+            pair,
+            direction: prediction.direction,          // "UP" | "DOWN"
+            confidence: prediction.confidence ?? 'MEDIUM', // "HIGH" | "MEDIUM" | "LOW"
+            reasoning: prediction.reasoning ?? '',
+            currentPrice: priceData.price,
+            generatedAt: new Date().toISOString(),
+        });
+ 
+    } catch (err) {
+        console.error('[Predict] Error:', err.message);
+        res.status(500).json({ message: 'Internal server error', error: err.message });
+    }
+});
 // ==========================================
 // 3. ENDPOINT HARGA REALTIME
 // ==========================================
