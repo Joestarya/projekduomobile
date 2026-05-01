@@ -442,7 +442,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildHeader(),
-              _buildStatsBar(),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -458,7 +457,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       const SizedBox(height: 22),
                       _buildGameSection(),
                       const SizedBox(height: 28),
-                      if (_history.isNotEmpty) _buildHistory(),
                       const SizedBox(height: 32),
                     ],
                   ),
@@ -482,15 +480,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: Color(0xFF3A5070),
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 14),
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -843,15 +832,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'YOUR FORECAST',
-          style: TextStyle(
-            color: Color(0xFF2A3A5A),
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.5,
-          ),
-        ),
+      
         const SizedBox(height: 6),
         const Text(
           'Where will the price be in 60 seconds?',
@@ -948,42 +929,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Forecast label
-        Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: predColor.withOpacity(0.04),
-            borderRadius: BorderRadius.circular(8),
-            border:
-                Border.all(color: predColor.withOpacity(0.12), width: 1),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                isUp ? Icons.north_rounded : Icons.south_rounded,
-                color: predColor,
-                size: 14,
-              ),
-              const SizedBox(width: 7),
-              Text(
-                'Forecast: ${isUp ? "Higher" : "Lower"}',
-                style: TextStyle(
-                  color: predColor,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Entry  ${_fmtPrice(_entryPrice)}',
-                style: const TextStyle(
-                    color: Color(0xFF2A3A5A), fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
 
         // Timer row
         Row(

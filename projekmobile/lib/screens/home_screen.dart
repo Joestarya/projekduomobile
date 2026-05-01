@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dashboard_screen.dart';
-import 'feature/settings_screen.dart';
 import 'feature/map_screen.dart';
-import 'feature/gamescreen.dart';
 import 'user/profile_screen.dart';
+import 'feature/gamescreen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,6 +18,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static final List<Widget> _widgetOptions = <Widget>[
     DashboardScreen(),
     AtmFinderScreen(),
+    const GameScreen(),
     ProfileMenu(), // Menu Profil & Saran Kesan (Wajib Tugas Akhir)
   ];
 
@@ -31,23 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Jaga Lilin'),
-        centerTitle: false,
-        titleTextStyle: const TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.currency_exchange),
-            onPressed: () {
-              // TODO: Navigasi ke Konverter Mata Uang
-            },
-          ),
-        ],
-      ),
+      
       body: _widgetOptions.elementAt(_selectedIndex),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
@@ -55,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Market'),
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Lokasi'),
+          BottomNavigationBarItem(icon: Icon(Icons.sports_esports), label: 'Game'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
         currentIndex: _selectedIndex,

@@ -6,8 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:sensors_plus/sensors_plus.dart';
 import '../service/api_config.dart';
-import 'feature/gamescreen.dart';
-
 // ─────────────────────────────────────────────
 // MODEL
 // ─────────────────────────────────────────────
@@ -533,7 +531,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Portfolio Card dengan animasi slide
             SlideTransition(
               position: Tween<Offset>(
                 begin: const Offset(0, -0.15),
@@ -547,6 +544,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
             ),
+            
             const SizedBox(height: 20),
             // Header
             Padding(
@@ -640,19 +638,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
                 // Clock
                 Flexible(child: _buildClockWidget(isCompact: isCompact)),
-                // Game button
                 IconButton(
+                  icon: const Icon(Icons.currency_exchange, color: Colors.white70),
                   onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const GameScreen()),
-                    );
+                    // TODO: Navigasi ke Konverter Mata Uang
                   },
-                  icon: Icon(
-                    Icons.sports_esports_rounded,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 22,
-                  ),
                 ),
               ],
             ),
@@ -906,6 +896,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   letterSpacing: 0.5,
                 ),
               ),
+              
               GestureDetector(
                 onTap: () => setState(() => _isPrivacyMode = !_isPrivacyMode),
                 child: Container(
@@ -1061,6 +1052,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
+        
         const Text(
           'TOP ASSETS',
           style: TextStyle(
