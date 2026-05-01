@@ -189,13 +189,27 @@ db.query("ALTER TABLE users ADD COLUMN qr_data TEXT DEFAULT NULL", (err) => {
 });
 
 app.post('/qr-scan', (req, res) => {
-    const { username, qr_data } = req.body;
-    if (!username || !qr_data) {
-        return res.status(400).json({ message: 'Username dan Data QR tidak boleh kosong' });
+    const { user_id, username, full_name, qr_data } = req.body;
+       
+    if ((!user_id || String(user_id).trim() === '') && (!username || username.trim() === '') && (!full_name || full_name.trim() === '')) {
+        return res.status(400).json({ message: 'Identitas user tidak boleh kosong' });
+    }
+    if (!qr_data || qr_data.trim() === '') {
+        return res.status(400).json({ message: 'Data QR tidak boleh kosong' });
     }
     
-    const query = 'UPDATE users SET qr_data = ? WHERE username = ?';
-    db.query(query, [qr_data, username], (err, results) => {
+    // Jika `user_id` dikirimkan, coba gunakan sebagai integer id.
+    const parsedId = user_id ? parseInt(String(user_id), 10) : NaN;
+    let query = 'UPDATE users SET qr_data = ? WHERE id = ?';
+    let params = [qr_data, parsedId];
+
+    // Jika parsedId tidak valid (NaN), fallback ke username/full_name
+    if (isNaN(parsedId) || parsedId <= 0) {
+        query = 'UPDATE users SET qr_data = ? WHERE username = ? OR full_name = ?';
+        params = [qr_data, username, full_name || username];
+    }
+
+    db.query(query, params, (err, results) => {
         if (err) {
             return res.status(500).json({ error: err.message });
         }

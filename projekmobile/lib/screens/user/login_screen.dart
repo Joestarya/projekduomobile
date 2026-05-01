@@ -161,6 +161,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
         await prefs.setString('token', token);
         if (data['user'] != null) {
+          await prefs.setString(
+            'user_id',
+            (data['user']['id'] ?? '').toString(),
+          );
           await prefs.setString('username', data['user']['username'] ?? '');
           await prefs.setString('full_name', data['user']['full_name'] ?? '');
         }
@@ -215,12 +219,20 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.lock_person_rounded, size: 80, color: Theme.of(context).primaryColor),
+              Icon(
+                Icons.lock_person_rounded,
+                size: 80,
+                color: Theme.of(context).primaryColor,
+              ),
               const SizedBox(height: 24),
               const Text(
                 'Welcome Back',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -233,7 +245,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _usernameController,
                 decoration: const InputDecoration(
                   labelText: 'Email',
-                  prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF8B9BB4)),
+                  prefixIcon: Icon(
+                    Icons.email_outlined,
+                    color: Color(0xFF8B9BB4),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -242,7 +257,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 obscureText: true,
                 decoration: const InputDecoration(
                   labelText: 'Password',
-                  prefixIcon: Icon(Icons.lock_outline, color: Color(0xFF8B9BB4)),
+                  prefixIcon: Icon(
+                    Icons.lock_outline,
+                    color: Color(0xFF8B9BB4),
+                  ),
                 ),
               ),
               const SizedBox(height: 32),
@@ -250,7 +268,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton(
                       onPressed: _login,
-                      child: const Text('Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        'Login',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
               if (_showBiometricLogin) ...[
                 const SizedBox(height: 16),
@@ -275,10 +299,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const RegisterScreen(),
+                    ),
                   );
                 },
-                child: const Text('Belum punya akun? Daftar', style: TextStyle(color: Color(0xFF638BFF))),
+                child: const Text(
+                  'Belum punya akun? Daftar',
+                  style: TextStyle(color: Color(0xFF638BFF)),
+                ),
               ),
             ],
           ),

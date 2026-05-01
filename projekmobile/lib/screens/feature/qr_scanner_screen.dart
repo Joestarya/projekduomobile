@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+// removed unused imports
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:http/http.dart' as http;
 import '../../service/api_config.dart';
@@ -20,37 +21,72 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
   Future<void> _processQRCode(String qrData) async {
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
-    
+
     _scannerController.stop();
 
     try {
       final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id') ?? '';
       final username = prefs.getString('username') ?? '';
+      final fullName = prefs.getString('full_name') ?? '';
+
+      if (userId.isEmpty && username.isEmpty && fullName.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sesi user tidak ditemukan. Silakan login ulang.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
 
       final response = await http.post(
         Uri.parse(ApiConfig.endpoint('/qr-scan')),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
+          'user_id': userId,
           'username': username,
-          'qr_data': qrData
+          'full_name': fullName,
+          'qr_data': qrData,
         }),
       );
 
+      final responseBody = response.body.isNotEmpty
+          ? jsonDecode(response.body)
+          : {};
+      final responseMessage =
+          responseBody is Map && responseBody['message'] != null
+          ? responseBody['message'].toString()
+          : 'Gagal menyimpan QR';
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (!mounted) return;
+        // Kembali ke layar sebelumnya (profil) setelah berhasil menyimpan
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Data QR berhasil disimpan!'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Data QR berhasil disimpan!'),
+
+            backgroundColor: Colors.green,
+          ),
         );
       } else {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menyimpan: ${response.statusCode}'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('$responseMessage (${response.statusCode})'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error jaringan: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Error jaringan: $e'),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       if (mounted) {
@@ -87,7 +123,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               for (final barcode in barcodes) {
                 if (barcode.rawValue != null && !_isProcessing) {
                   _processQRCode(barcode.rawValue!);
-                  break; 
+                  break;
                 }
               }
             },
