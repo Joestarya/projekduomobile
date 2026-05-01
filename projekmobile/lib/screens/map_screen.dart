@@ -81,6 +81,7 @@ class _AtmFinderScreenState extends State<AtmFinderScreen>
   static const double _maxR = 5000;
   bool _showBanks = true;
   bool _showATMs = true;
+  bool _radiusPanelExpanded = false;
 
   // Live tracking
   StreamSubscription<Position>? _locationSub;
@@ -392,6 +393,33 @@ out center tags;
     );
   }
 
+Widget _infoRow(IconData icon, String label, String value) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: AppTheme.textMuted, size: 13),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      color: AppTheme.textDim,
+                      fontSize: 10,
+                      letterSpacing: 0.5)),
+              Text(value,
+                  style: const TextStyle(
+                      color: AppTheme.textPrimary, fontSize: 12)),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
   // ── MAP ───────────────────────────────────
   Widget _buildMap() {
     final filtered = _filteredNodes;
@@ -584,156 +612,138 @@ out center tags;
     );
   }
 
-  // ── TOP HUD ───────────────────────────────
-  Widget _buildTopHUD() {
-    final filtered = _filteredNodes;
-    final atmCount  = filtered.where((n) => n.type != NodeType.bank).length;
-    final bankCount = filtered.where((n) => n.type == NodeType.bank).length;
+// ── TOP HUD (lebih compact) ──────────────────
+Widget _buildTopHUD() {
+  final filtered = _filteredNodes;
+  final atmCount  = filtered.where((n) => n.type != NodeType.bank).length;
+  final bankCount = filtered.where((n) => n.type == NodeType.bank).length;
 
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + 12,
-      left: 16,
-      right: 16,
-      child: _glass(
-        child: Row(
-          children: [
-            // App title
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 8, height: 8,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _locationSub != null ? const Color(0xFF52D48F) : AppTheme.textDim,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _locationSub != null ? 'LIVE' : 'OFFLINE',
-                      style: TextStyle(
-                        color: _locationSub != null ? const Color(0xFF52D48F) : AppTheme.textDim,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                  ],
+  return Positioned(
+    top: MediaQuery.of(context).padding.top + 8,
+    left: 16,
+    right: 16,
+    child: _glass(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 7, height: 7,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _locationSub != null
+                      ? const Color(0xFF52D48F)
+                      : AppTheme.textDim,
                 ),
-                const SizedBox(height: 2),
-                const Text(
-                  'ATM Finder',
-                  style: TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.3,
-                  ),
+              ),
+              const SizedBox(width: 5),
+              const Text(
+                'ATM Finder',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
                 ),
-              ],
-            ),
-            const Spacer(),
-
-            // Stats chips
-            if (!_isLoading && _errorMsg == null) ...[
-              _statChip(atmCount.toString(), 'ATM', AppTheme.atmColor),
-              const SizedBox(width: 8),
-              _statChip(bankCount.toString(), 'Bank', AppTheme.bankColor),
-            ] else if (_isLoading)
-              SizedBox(
-                width: 20, height: 20,
-                child: CircularProgressIndicator(
-                  color: AppTheme.accent,
-                  strokeWidth: 2,
-                ),
-              )
-            else
-              Icon(Icons.warning_amber_rounded, color: Colors.redAccent.shade200, size: 22),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          if (!_isLoading && _errorMsg == null) ...[
+            _statChip(atmCount.toString(), 'ATM', AppTheme.atmColor),
+            const SizedBox(width: 6),
+            _statChip(bankCount.toString(), 'Bank', AppTheme.bankColor),
+          ] else if (_isLoading)
+            SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(color: AppTheme.accent, strokeWidth: 2),
+            )
+          else
+            Icon(Icons.warning_amber_rounded, color: Colors.redAccent.shade200, size: 18),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _statChip(String count, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
+Widget _statChip(String count, String label, Color color) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withOpacity(0.3)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(count, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w800)),
+        const SizedBox(width: 3),
+        Text(label, style: TextStyle(color: color.withOpacity(0.7), fontSize: 10)),
+      ],
+    ),
+  );
+}
+
+// ── RADIUS PANEL (collapsible) ────────────────
+Widget _buildRadiusPanel() {
+  return Positioned(
+    top: MediaQuery.of(context).padding.top + 62,
+    left: 16,
+    right: 16,
+    child: _glass(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(count, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w800)),
-          Text(label, style: TextStyle(color: color.withOpacity(0.7), fontSize: 9, letterSpacing: 0.5)),
-        ],
-      ),
-    );
-  }
-
-  // ── RADIUS PANEL ──────────────────────────
-  Widget _buildRadiusPanel() {
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + 100,
-      left: 16,
-      right: 16,
-      child: _glass(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header row
-            Row(
+          // ── Tap row untuk expand/collapse ──
+          GestureDetector(
+            onTap: () => setState(() => _radiusPanelExpanded = !_radiusPanelExpanded),
+            behavior: HitTestBehavior.opaque,
+            child: Row(
               children: [
-                const Icon(Icons.radar_rounded, color: AppTheme.accent, size: 16),
+                const Icon(Icons.radar_rounded, color: AppTheme.accent, size: 14),
                 const SizedBox(width: 6),
-                const Text(
-                  'RADIUS SCAN',
-                  style: TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.5,
+                Text(
+                  _radius >= 1000
+                      ? '${(_radius / 1000).toStringAsFixed(1)} km'
+                      : '${_radius.toInt()} m',
+                  style: const TextStyle(
+                    color: AppTheme.accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
+                const SizedBox(width: 8),
+                _filterChip('ATM', AppTheme.atmColor, _showATMs,
+                    (v) => setState(() => _showATMs = v)),
+                const SizedBox(width: 6),
+                _filterChip('Bank', AppTheme.bankColor, _showBanks,
+                    (v) => setState(() => _showBanks = v)),
                 const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.accent.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.accent.withOpacity(0.4)),
-                  ),
-                  child: Text(
-                    _radius >= 1000
-                        ? '${(_radius / 1000).toStringAsFixed(1)} km'
-                        : '${_radius.toInt()} m',
-                    style: const TextStyle(
-                      color: AppTheme.accent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                Icon(
+                  _radiusPanelExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: AppTheme.textMuted,
+                  size: 18,
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+          ),
 
-            // Slider
+          // ── Slider (hanya muncul kalau expanded) ──
+          if (_radiusPanelExpanded) ...[
+            const SizedBox(height: 8),
             SliderTheme(
               data: SliderTheme.of(context).copyWith(
                 activeTrackColor: AppTheme.accent,
                 inactiveTrackColor: AppTheme.border,
                 thumbColor: AppTheme.accent,
                 overlayColor: AppTheme.accent.withOpacity(0.15),
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
                 trackHeight: 3,
-                trackShape: const RoundedRectSliderTrackShape(),
               ),
               child: Slider(
                 value: _radius,
@@ -746,61 +756,55 @@ out center tags;
                 },
               ),
             ),
-
-            // Filter toggles
             Row(
-              children: [
-                _filterChip('ATM', AppTheme.atmColor, _showATMs, (v) => setState(() => _showATMs = v)),
-                const SizedBox(width: 8),
-                _filterChip('Bank', AppTheme.bankColor, _showBanks, (v) => setState(() => _showBanks = v)),
-                const Spacer(),
-                Text(
-                  '500m — 5km',
-                  style: const TextStyle(color: AppTheme.textDim, fontSize: 9),
-                ),
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                Text('500 m', style: TextStyle(color: AppTheme.textDim, fontSize: 9)),
+                Text('5 km',  style: TextStyle(color: AppTheme.textDim, fontSize: 9)),
               ],
             ),
           ],
-        ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _filterChip(String label, Color color, bool active, ValueChanged<bool> onTap) {
-    return GestureDetector(
-      onTap: () => onTap(!active),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: active ? color.withOpacity(0.18) : AppTheme.surfaceHigh,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: active ? color.withOpacity(0.5) : AppTheme.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              active ? Icons.check_circle_rounded : Icons.circle_outlined,
+Widget _filterChip(String label, Color color, bool active, ValueChanged<bool> onTap) {
+  return GestureDetector(
+    onTap: () => onTap(!active),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: active ? color.withOpacity(0.18) : AppTheme.surfaceHigh,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: active ? color.withOpacity(0.5) : AppTheme.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            active ? Icons.check_circle_rounded : Icons.circle_outlined,
+            color: active ? color : AppTheme.textDim,
+            size: 10,
+          ),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(
               color: active ? color : AppTheme.textDim,
-              size: 12,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: active ? color : AppTheme.textDim,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  // ── NODE DETAIL SHEET ─────────────────────
+// ── NODE DETAIL SHEET (compact + scroll) ──────
 Widget _buildNodeSheet(AtmNode node) {
   final color = node.type == NodeType.bank ? AppTheme.bankColor : AppTheme.atmColor;
   return Positioned(
@@ -811,263 +815,251 @@ Widget _buildNodeSheet(AtmNode node) {
         end: Offset.zero,
       ).animate(_slideAnim),
       child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 100),
-        padding: const EdgeInsets.all(20),
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 90),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.35,
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
           color: AppTheme.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: color.withOpacity(0.3)),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 24, offset: const Offset(0, 8)),
+            BoxShadow(
+                color: Colors.black.withOpacity(0.4),
+                blurRadius: 24,
+                offset: const Offset(0, 8)),
             BoxShadow(color: color.withOpacity(0.1), blurRadius: 24),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── HEADER ROW ──
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: color.withOpacity(0.3)),
-                  ),
-                  child: Icon(
-                    node.type == NodeType.bank
-                        ? Icons.account_balance_rounded
-                        : Icons.credit_card_rounded,
-                    color: color,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        node.label,
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        node.type == NodeType.bank ? 'Kantor Bank' : 'ATM / Mesin Tunai',
-                        style: TextStyle(color: color.withOpacity(0.8), fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-                GestureDetector(
-                  onTap: _closeBottomSheet,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceHigh,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.close_rounded, color: AppTheme.textMuted, size: 18),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-            Container(height: 1, color: AppTheme.border),
-            const SizedBox(height: 14),
-
-            // ── INFO ROWS ──
-            if (node.bankName.isNotEmpty)
-              _infoRow(Icons.business_rounded, 'Operator', node.bankName),
-            if (node.address.isNotEmpty)
-              _infoRow(Icons.location_on_rounded, 'Alamat', node.address),
-            _infoRow(
-              Icons.gps_fixed_rounded,
-              'Koordinat',
-              '${node.position.latitude.toStringAsFixed(6)}, ${node.position.longitude.toStringAsFixed(6)}',
-            ),
-            if (_myLocation != null)
-              _infoRow(
-                Icons.directions_walk_rounded,
-                'Jarak',
-                '${const Distance().as(LengthUnit.Meter, _myLocation!, node.position).toStringAsFixed(0)} meter dari lokasi kamu',
-              ),
-
-            const SizedBox(height: 16),
-
-            // ── ROUTE BUTTON ROW ──
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isRouting
-                        ? null
-                        : () => _fetchRoute(node.position),
-                    icon: _isRouting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.directions, size: 18),
-                    label: Text(_isRouting ? 'Mencari rute...' : 'Tampilkan Rute'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: color,
-                      foregroundColor: AppTheme.bg,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-                if (_routeInfo != null) ...[
-                  const SizedBox(width: 12),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── HEADER ──
+              Row(
+                children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: AppTheme.surfaceHigh,
+                      color: color.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: color.withOpacity(0.3)),
                     ),
-                    child: Text(
-                      _routeInfo!,
-                      style: const TextStyle(
-                        color: AppTheme.accent,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
+                    child: Icon(
+                      node.type == NodeType.bank
+                          ? Icons.account_balance_rounded
+                          : Icons.credit_card_rounded,
+                      color: color,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          node.label,
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          node.type == NodeType.bank
+                              ? 'Kantor Bank'
+                              : 'ATM / Mesin Tunai',
+                          style: TextStyle(
+                              color: color.withOpacity(0.8), fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _closeBottomSheet,
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceHigh,
+                        borderRadius: BorderRadius.circular(7),
                       ),
+                      child: const Icon(Icons.close_rounded,
+                          color: AppTheme.textMuted, size: 16),
                     ),
                   ),
                 ],
-              ],
-            ),
-          ],
+              ),
+
+              const SizedBox(height: 10),
+              Container(height: 1, color: AppTheme.border),
+              const SizedBox(height: 10),
+
+              // ── INFO ROWS ──
+              if (node.bankName.isNotEmpty)
+                _infoRow(Icons.business_rounded, 'Operator', node.bankName),
+              if (node.address.isNotEmpty)
+                _infoRow(Icons.location_on_rounded, 'Alamat', node.address),
+              if (_myLocation != null)
+                _infoRow(
+                  Icons.directions_walk_rounded,
+                  'Jarak',
+                  '${const Distance().as(LengthUnit.Meter, _myLocation!, node.position).toStringAsFixed(0)} m',
+                ),
+
+              const SizedBox(height: 10),
+
+              // ── ROUTE BUTTON ──
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed:
+                          _isRouting ? null : () => _fetchRoute(node.position),
+                      icon: _isRouting
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.directions, size: 16),
+                      label: Text(
+                        _isRouting ? 'Mencari rute...' : 'Tampilkan Rute',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: color,
+                        foregroundColor: AppTheme.bg,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_routeInfo != null) ...[
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceHigh,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _routeInfo!,
+                        style: const TextStyle(
+                          color: AppTheme.accent,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     ),
   );
 }
 
-  Widget _infoRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: AppTheme.textMuted, size: 15),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+// ── BOTTOM CONTROLS (lebih compact) ──────────
+Widget _buildBottomControls() {
+  return Positioned(
+    bottom: 20,
+    left: 16,
+    right: 16,
+    child: Row(
+      children: [
+        Expanded(
+          child: _glass(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
               children: [
-                Text(label, style: const TextStyle(color: AppTheme.textDim, fontSize: 10, letterSpacing: 0.5)),
-                Text(value, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                Icon(
+                  Icons.my_location_rounded,
+                  color: AppTheme.userColor.withOpacity(0.8),
+                  size: 13,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _myLocation != null
+                        ? '${_myLocation!.latitude.toStringAsFixed(5)}, ${_myLocation!.longitude.toStringAsFixed(5)}'
+                        : 'Mendeteksi lokasi...',
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
           ),
+        ),
+        const SizedBox(width: 8),
+        _iconBtn(
+          icon: Icons.navigation_rounded,
+          color: AppTheme.userColor,
+          onTap: _myLocation != null
+              ? () {
+                  HapticFeedback.lightImpact();
+                  _mapCtrl.move(_myLocation!, 15.5);
+                }
+              : null,
+        ),
+        const SizedBox(width: 6),
+        _iconBtn(
+          icon: _isLoading
+              ? Icons.hourglass_top_rounded
+              : Icons.refresh_rounded,
+          color: AppTheme.accent,
+          onTap: _isLoading
+              ? null
+              : () {
+                  HapticFeedback.mediumImpact();
+                  _initMap();
+                },
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _iconBtn({
+  required IconData icon,
+  required Color color,
+  VoidCallback? onTap,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: onTap != null ? color.withOpacity(0.4) : AppTheme.border),
+        boxShadow: [
+          if (onTap != null)
+            BoxShadow(
+                color: color.withOpacity(0.2), blurRadius: 8, spreadRadius: 0),
         ],
       ),
-    );
-  }
-
-  // ── BOTTOM CONTROLS ───────────────────────
-  Widget _buildBottomControls() {
-    return Positioned(
-      bottom: 28,
-      left: 16,
-      right: 16,
-      child: Row(
-        children: [
-          // Koordinat
-          Expanded(
-            child: _glass(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.my_location_rounded,
-                    color: AppTheme.userColor.withOpacity(0.8),
-                    size: 15,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _myLocation != null
-                          ? '${_myLocation!.latitude.toStringAsFixed(5)}, ${_myLocation!.longitude.toStringAsFixed(5)}'
-                          : 'Mendeteksi lokasi...',
-                      style: const TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 11,
-                        fontFamily: 'monospace',
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-
-          // Recenter button
-          _iconBtn(
-            icon: Icons.navigation_rounded,
-            color: AppTheme.userColor,
-            onTap: _myLocation != null ? () {
-              HapticFeedback.lightImpact();
-              _mapCtrl.move(_myLocation!, 15.5);
-            } : null,
-          ),
-          const SizedBox(width: 8),
-
-          // Refresh button
-          _iconBtn(
-            icon: _isLoading ? Icons.hourglass_top_rounded : Icons.refresh_rounded,
-            color: AppTheme.accent,
-            onTap: _isLoading ? null : () {
-              HapticFeedback.mediumImpact();
-              _initMap();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _iconBtn({
-    required IconData icon,
-    required Color color,
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          color: AppTheme.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: onTap != null ? color.withOpacity(0.4) : AppTheme.border),
-          boxShadow: [
-            if (onTap != null)
-              BoxShadow(color: color.withOpacity(0.2), blurRadius: 10, spreadRadius: 0),
-          ],
-        ),
-        child: Icon(
-          icon,
-          color: onTap != null ? color : AppTheme.textDim,
-          size: 22,
-        ),
-      ),
-    );
-  }
-
+      child: Icon(icon,
+          color: onTap != null ? color : AppTheme.textDim, size: 20),
+    ),
+  );
+}
   // ── LOADING OVERLAY ───────────────────────
   Widget _buildLoadingOverlay() {
     return Positioned(
