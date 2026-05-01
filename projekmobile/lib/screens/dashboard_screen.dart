@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:sensors_plus/sensors_plus.dart';
 import '../service/api_config.dart';
-import 'gamescreen.dart';
+import 'feature/gamescreen.dart';
 
 // ─────────────────────────────────────────────
 // MODEL
@@ -330,7 +330,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     // Fallback: langsung ke Binance public API
     try {
       final binanceUrl =
-          'https://api.binance.com/api/v3/klines?symbol=$symbol&interval=1h&limit=24';
+          'https://data-api.binance.vision/api/v3/klines?symbol=$symbol&interval=1h&limit=24';
       final resp = await http
           .get(Uri.parse(binanceUrl))
           .timeout(const Duration(seconds: 6));

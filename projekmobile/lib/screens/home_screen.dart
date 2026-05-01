@@ -1,9 +1,9 @@
-import 'dashboard_screen.dart';
 import 'package:flutter/material.dart';
-import 'settings_screen.dart';
-
-import 'map_screen.dart';
-import 'gamescreen.dart';
+import 'dashboard_screen.dart';
+import 'feature/settings_screen.dart';
+import 'feature/map_screen.dart';
+import 'feature/gamescreen.dart';
+import 'user/profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,6 +33,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Jaga Lilin'),
+        centerTitle: false,
+        titleTextStyle: const TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.currency_exchange),
@@ -44,80 +50,18 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: _widgetOptions.elementAt(_selectedIndex),
       bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: const Color(0xFF0C0F1A),
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Market'),
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Lokasi'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
         currentIndex: _selectedIndex,
+        selectedItemColor: Colors.white,
+        unselectedItemColor: Colors.white54,
         onTap: _onItemTapped,
       ),
-    );
-  }
-}
-
-// WIDGET KHUSUS PROFIL & SARAN TPM
-class ProfileMenu extends StatelessWidget {
-  const ProfileMenu({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      children: [
-        const CircleAvatar(
-          radius: 50,
-          backgroundColor: Color(0xFF283548),
-          backgroundImage: NetworkImage(
-            'https://via.placeholder.com/150',
-          ), // Placeholder gambar profil
-        ),
-        const SizedBox(height: 16),
-        const Center(
-          child: Text(
-            'User',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Card(
-          child: Column(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.feedback, color: Color(0xFF638BFF)),
-                title: const Text('Saran & Kesan Kuliah TPM'),
-                subtitle: const Text('Beri masukan untuk mata kuliah ini', style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12)),
-                onTap: () {
-                  // TODO: Buka form saran
-                },
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.videogame_asset, color: Color(0xFF638BFF)),
-                title: const Text('Mini Game: Crypto Flip'),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const GameScreen()),
-                  );
-                },
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.settings, color: Color(0xFF638BFF)),
-                title: const Text('Setting'),
-                subtitle: const Text('Pengaturan aplikasi', style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12)),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

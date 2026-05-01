@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'service/biometric_auth_service.dart';
-import 'screens/login_screen.dart';
+import 'screens/user/login_screen.dart';
 import 'screens/home_screen.dart';
 
 void main() {

@@ -4,7 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import '../service/api_config.dart';
+import '../../service/api_config.dart';
 
 // ─────────────────────────────────────────────
 // ENUMS & MODELS
