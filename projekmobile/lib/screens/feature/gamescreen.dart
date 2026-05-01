@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../../service/api_config.dart';
+import '../../widgets/ai_prediction_card.dart';
 
 // ─────────────────────────────────────────────
 // ENUMS & MODELS
@@ -833,6 +834,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
       
+        AiPredictionCard(selectedPair: _selectedPair),
+
+
         const SizedBox(height: 6),
         const Text(
           'Where will the price be in 60 seconds?',
