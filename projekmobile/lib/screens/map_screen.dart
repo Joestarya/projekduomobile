@@ -92,6 +92,12 @@ class _AtmFinderScreenState extends State<AtmFinderScreen>
   late AnimationController _slideCtrl;
   late Animation<double> _slideAnim;
 
+  //route
+
+  List<LatLng> _routePoints = [];
+  bool _isRouting = false;
+  String? _routeInfo;
+
   // Bottom sheet
   bool _showBottomSheet = false;
 
@@ -132,6 +138,51 @@ class _AtmFinderScreenState extends State<AtmFinderScreen>
       _startTracking();
     }
     if (mounted) setState(() => _isLoading = false);
+  }
+
+// ── FETCH ROUTE (OSRM API) ────────────────
+  Future<void> _fetchRoute(LatLng destination) async {
+    if (_myLocation == null) return;
+    
+    setState(() { 
+      _isRouting = true; 
+      _routePoints = []; 
+      _routeInfo = null; 
+    });
+
+    final start = _myLocation!;
+    // Format OSRM: longitude,latitude
+    final url = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/'
+        '${start.longitude},${start.latitude};'
+        '${destination.longitude},${destination.latitude}'
+        '?geometries=geojson&overview=full');
+
+    try {
+      final res = await http.get(url).timeout(const Duration(seconds: 15));
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        if (data['code'] == 'Ok') {
+          final route = data['routes'][0];
+          final geometry = route['geometry']['coordinates'] as List;
+          
+          // OSRM mengembalikan [longitude, latitude], latlong2 butuh (latitude, longitude)
+          final points = geometry.map((coord) => LatLng(coord[1], coord[0])).toList();
+          
+          final distance = route['distance'] as num; // dalam meter
+          final duration = route['duration'] as num; // dalam detik
+
+          setState(() {
+            _routePoints = points;
+            _routeInfo = '${(distance / 1000).toStringAsFixed(1)} km • ${(duration / 60).toStringAsFixed(0)} mnt';
+          });
+        }
+      }
+    } catch (e) {
+      _setError('Gagal memuat rute navigasi.');
+    } finally {
+      if (mounted) setState(() => _isRouting = false);
+    }
   }
 
   // ── LOCATION ──────────────────────────────
@@ -301,6 +352,8 @@ out center tags;
     setState(() {
       _selectedNode    = node;
       _showBottomSheet = true;
+      _routePoints = []; //reset route
+      _routeInfo = null;
     });
     _slideCtrl.forward(from: 0);
     _mapCtrl.move(node.position, 16.0);
@@ -309,6 +362,8 @@ out center tags;
   void _closeBottomSheet() {
     _slideCtrl.reverse().then((_) {
       if (mounted) setState(() { _showBottomSheet = false; _selectedNode = null; });
+      _routePoints = []; // Reset rute 
+      _routeInfo = null;
     });
   }
 
@@ -369,6 +424,19 @@ out center tags;
           ]),
 
         // ATM / Bank markers
+        // Route Polyline (Tambahkan bagian ini)
+        PolylineLayer(
+          polylines: [
+            if (_routePoints.isNotEmpty)
+              Polyline(
+                points: _routePoints,
+                color: AppTheme.accentSoft, // Warna garis rute
+                strokeWidth: 4.5,           // Ketebalan garis
+                borderColor: AppTheme.accent,
+                borderStrokeWidth: 1.5,
+              ),
+          ],
+        ),
         MarkerLayer(
           markers: [
             ...filtered.map((node) => Marker(
@@ -733,111 +801,158 @@ out center tags;
   }
 
   // ── NODE DETAIL SHEET ─────────────────────
-  Widget _buildNodeSheet(AtmNode node) {
-    final color = node.type == NodeType.bank ? AppTheme.bankColor : AppTheme.atmColor;
-    return Positioned(
-      left: 0, right: 0, bottom: 0,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 1),
-          end: Offset.zero,
-        ).animate(_slideAnim),
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(12, 0, 12, 100),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: color.withOpacity(0.3)),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 24, offset: const Offset(0, 8)),
-              BoxShadow(color: color.withOpacity(0.1), blurRadius: 24),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: color.withOpacity(0.3)),
-                    ),
-                    child: Icon(
-                      node.type == NodeType.bank
-                          ? Icons.account_balance_rounded
-                          : Icons.credit_card_rounded,
-                      color: color,
-                      size: 22,
-                    ),
+Widget _buildNodeSheet(AtmNode node) {
+  final color = node.type == NodeType.bank ? AppTheme.bankColor : AppTheme.atmColor;
+  return Positioned(
+    left: 0, right: 0, bottom: 0,
+    child: SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0, 1),
+        end: Offset.zero,
+      ).animate(_slideAnim),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 100),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withOpacity(0.3)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 24, offset: const Offset(0, 8)),
+            BoxShadow(color: color.withOpacity(0.1), blurRadius: 24),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── HEADER ROW ──
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: color.withOpacity(0.3)),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          node.label,
-                          style: const TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          node.type == NodeType.bank ? 'Kantor Bank' : 'ATM / Mesin Tunai',
-                          style: TextStyle(color: color.withOpacity(0.8), fontSize: 12),
-                        ),
-                      ],
-                    ),
+                  child: Icon(
+                    node.type == NodeType.bank
+                        ? Icons.account_balance_rounded
+                        : Icons.credit_card_rounded,
+                    color: color,
+                    size: 22,
                   ),
-                  GestureDetector(
-                    onTap: _closeBottomSheet,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceHigh,
-                        borderRadius: BorderRadius.circular(8),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        node.label,
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      child: const Icon(Icons.close_rounded, color: AppTheme.textMuted, size: 18),
+                      Text(
+                        node.type == NodeType.bank ? 'Kantor Bank' : 'ATM / Mesin Tunai',
+                        style: TextStyle(color: color.withOpacity(0.8), fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _closeBottomSheet,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceHigh,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.close_rounded, color: AppTheme.textMuted, size: 18),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+            Container(height: 1, color: AppTheme.border),
+            const SizedBox(height: 14),
+
+            // ── INFO ROWS ──
+            if (node.bankName.isNotEmpty)
+              _infoRow(Icons.business_rounded, 'Operator', node.bankName),
+            if (node.address.isNotEmpty)
+              _infoRow(Icons.location_on_rounded, 'Alamat', node.address),
+            _infoRow(
+              Icons.gps_fixed_rounded,
+              'Koordinat',
+              '${node.position.latitude.toStringAsFixed(6)}, ${node.position.longitude.toStringAsFixed(6)}',
+            ),
+            if (_myLocation != null)
+              _infoRow(
+                Icons.directions_walk_rounded,
+                'Jarak',
+                '${const Distance().as(LengthUnit.Meter, _myLocation!, node.position).toStringAsFixed(0)} meter dari lokasi kamu',
+              ),
+
+            const SizedBox(height: 16),
+
+            // ── ROUTE BUTTON ROW ──
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isRouting
+                        ? null
+                        : () => _fetchRoute(node.position),
+                    icon: _isRouting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.directions, size: 18),
+                    label: Text(_isRouting ? 'Mencari rute...' : 'Tampilkan Rute'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: color,
+                      foregroundColor: AppTheme.bg,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                if (_routeInfo != null) ...[
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceHigh,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      _routeInfo!,
+                      style: const TextStyle(
+                        color: AppTheme.accent,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
-              ),
-
-              const SizedBox(height: 16),
-              Container(height: 1, color: AppTheme.border),
-              const SizedBox(height: 14),
-
-              // Info rows
-              if (node.bankName.isNotEmpty)
-                _infoRow(Icons.business_rounded, 'Operator', node.bankName),
-              if (node.address.isNotEmpty)
-                _infoRow(Icons.location_on_rounded, 'Alamat', node.address),
-              _infoRow(
-                Icons.gps_fixed_rounded,
-                'Koordinat',
-                '${node.position.latitude.toStringAsFixed(6)}, ${node.position.longitude.toStringAsFixed(6)}',
-              ),
-              if (_myLocation != null) ...[
-                const SizedBox(height: 4),
-                _infoRow(
-                  Icons.directions_walk_rounded,
-                  'Jarak',
-                  '${const Distance().as(LengthUnit.Meter, _myLocation!, node.position).toStringAsFixed(0)} meter dari lokasi kamu',
-                ),
               ],
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _infoRow(IconData icon, String label, String value) {
     return Padding(
