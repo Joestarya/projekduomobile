@@ -78,7 +78,7 @@ class _AtmFinderScreenState extends State<AtmFinderScreen>
   // Settings
   double _radius = 1000;
   static const double _minR = 500;
-  static const double _maxR = 5000;
+  static const double _maxR = 10000;
   bool _showBanks = true;
   bool _showATMs = true;
   bool _radiusPanelExpanded = false;
@@ -760,7 +760,7 @@ Widget _buildRadiusPanel() {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: const [
                 Text('500 m', style: TextStyle(color: AppTheme.textDim, fontSize: 9)),
-                Text('5 km',  style: TextStyle(color: AppTheme.textDim, fontSize: 9)),
+                Text('10 km',  style: TextStyle(color: AppTheme.textDim, fontSize: 9)),
               ],
             ),
           ],
