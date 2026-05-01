@@ -4,7 +4,6 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 require('dotenv').config({ override: true });
 const db = require('./db');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 app.use(cors());
@@ -394,68 +393,6 @@ setInterval(() => {
         }
     }
 }, CACHE_TTL_MS);
-
-// ==========================================
-// 7. ENDPOINT AI PREDICTION (GEMINI)
-// ==========================================
-app.post('/ai/predict', async (req, res) => {
-    const { symbol, candles } = req.body;
-    
-    if (!symbol || !candles || !Array.isArray(candles)) {
-        return res.status(400).json({ message: 'Symbol dan data candles (array) wajib dikirim!' });
-    }
-
-    try {
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-            return res.status(500).json({ message: 'GEMINI_API_KEY belum dikonfigurasi di server.' });
-        }
-
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-        // Siapkan prompt
-        const priceText = candles.map(c => `Open: ${c.open}, High: ${c.high}, Low: ${c.low}, Close: ${c.close}`).join('\n');
-        
-        const prompt = `Anda adalah asisten AI ahli trading kripto untuk game simulasi.
-Tugas Anda adalah menganalisis data candlestick 1-menit terakhir untuk ${symbol} dan memberikan prediksi APAKAH harga akan NAIK (Higher) atau TURUN (Lower) dalam 1 menit ke depan.
-
-Data 30 menit terakhir:
-${priceText}
-
-Format jawaban Anda HARUS seperti ini:
-PREDIKSI: [Higher atau Lower]
-ALASAN: [Beri alasan singkat, maksimal 2 kalimat, gaya bahasa santai dan mudah dipahami trader pemula]`;
-
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-        const text = response.text();
-        
-        // Parsing hasil
-        let prediction = 'Unknown';
-        let reason = text;
-        
-        const predMatch = text.match(/PREDIKSI:\s*(Higher|Lower)/i);
-        if (predMatch && predMatch[1]) {
-            prediction = predMatch[1].trim();
-        }
-        
-        const reasonMatch = text.match(/ALASAN:\s*(.*)/is);
-        if (reasonMatch && reasonMatch[1]) {
-            reason = reasonMatch[1].trim();
-        }
-
-        res.json({
-            symbol,
-            prediction,
-            reason,
-            raw: text
-        });
-    } catch (err) {
-        console.error('[Gemini AI Error]:', err);
-        res.status(500).json({ message: 'Gagal mendapatkan prediksi dari AI.', error: err.message });
-    }
-});
 
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, '0.0.0.0', () => {

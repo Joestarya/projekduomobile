@@ -216,11 +216,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   List<Map<String, double>> _candles = [];
   final List<RoundResult> _history = [];
 
-  // ── AI State ───────────────────────────────
-  bool _isAiLoading = false;
-  String? _aiPrediction;
-  String? _aiReason;
-
   // ── Timers ─────────────────────────────────
   Timer? _priceTimer;
   Timer? _countdownTimer;
@@ -324,54 +319,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     }
   }
 
-  // ─────────────────────────────────────────────
-  // AI PREDICTION
-  // ─────────────────────────────────────────────
-  Future<void> _askAI() async {
-    if (_candles.isEmpty || _isAiLoading) return;
-    setState(() {
-      _isAiLoading = true;
-      _aiPrediction = null;
-      _aiReason = null;
-    });
-
-    try {
-      final resp = await http.post(
-        Uri.parse(ApiConfig.endpoint('/ai/predict')),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'symbol': _selectedPair,
-          'candles': _candles,
-        }),
-      ).timeout(const Duration(seconds: 15));
-
-      if (resp.statusCode == 200) {
-        final body = jsonDecode(resp.body);
-        if (mounted) {
-          setState(() {
-            _aiPrediction = body['prediction'];
-            _aiReason = body['reason'];
-            _isAiLoading = false;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _isAiLoading = false;
-            _aiReason = 'Gagal menghubungi AI Server.';
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isAiLoading = false;
-          _aiReason = 'Terjadi kesalahan jaringan saat bertanya ke AI.';
-        });
-      }
-    }
-  }
-
   // GAME LOGIC
   void _startRound(Prediction pred) {
     if (_phase != GamePhase.idle || _currentPrice == 0) return;
@@ -449,8 +396,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       _prediction = null;
       _lastResult = null;
       _secondsLeft = _roundSeconds.toDouble();
-      _aiPrediction = null;
-      _aiReason = null;
     });
   }
 
@@ -460,8 +405,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       _selectedPair = pair;
       _currentPrice = 0;
       _candles = [];
-      _aiPrediction = null;
-      _aiReason = null;
     });
     _fetchPrice();
     _fetchCandles();
@@ -915,8 +858,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           style: TextStyle(color: Color(0xFF3A5070), fontSize: 13),
         ),
         const SizedBox(height: 14),
-        _buildAiPredictionPanel(),
-        const SizedBox(height: 14),
         Row(
           children: [
             Expanded(child: _forecastButton(Prediction.up)),
@@ -938,91 +879,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildAiPredictionPanel() {
-    if (_aiPrediction != null || _aiReason != null) {
-      final isUp = _aiPrediction?.toLowerCase() == 'higher';
-      final isDown = _aiPrediction?.toLowerCase() == 'lower';
-      final accentColor = isUp ? const Color(0xFF26A69A) : (isDown ? const Color(0xFFEF5350) : const Color(0xFF9945FF));
-
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0C1018),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: accentColor.withOpacity(0.3), width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: accentColor.withOpacity(0.05),
-              blurRadius: 10,
-              spreadRadius: 2,
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.auto_awesome, color: accentColor, size: 14),
-                const SizedBox(width: 6),
-                Text(
-                  'AI PREDICTION: ${_aiPrediction ?? "Unknown"}',
-                  style: TextStyle(
-                    color: accentColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _aiReason ?? '',
-              style: const TextStyle(color: Color(0xFF8EA8C0), fontSize: 11, height: 1.4),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return GestureDetector(
-      onTap: _askAI,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0C1018),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFF9945FF).withOpacity(0.3), width: 1),
-        ),
-        alignment: Alignment.center,
-        child: _isAiLoading
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF9945FF)),
-              )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.auto_awesome, color: Color(0xFF9945FF), size: 16),
-                  SizedBox(width: 8),
-                  Text(
-                    'Ask AI for Forecast',
-                    style: TextStyle(
-                      color: Color(0xFF9945FF),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-      ),
     );
   }
 
