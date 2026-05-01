@@ -638,12 +638,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
                 // Clock
                 Flexible(child: _buildClockWidget(isCompact: isCompact)),
-                IconButton(
-                  icon: const Icon(Icons.currency_exchange, color: Colors.white70),
-                  onPressed: () {
-                    // TODO: Navigasi ke Konverter Mata Uang
-                  },
-                ),
+                
               ],
             ),
           ),
@@ -1049,63 +1044,27 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ASSETS HEADER
   // ─────────────────────────────────────────────
   Widget _buildAssetsHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        
-        const Text(
-          'TOP ASSETS',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.5,
-          ),
+  return Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      const Text(
+        'TOP ASSETS',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.5,
         ),
-        Row(
-          children: [
-            if (!_isLoadingPrices && _priceError == null)
-              AnimatedBuilder(
-                animation: _pulseController,
-                builder: (_, __) => Row(
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color.lerp(
-                          const Color(0xFF00E676),
-                          const Color(0xFF00C853).withOpacity(0.2),
-                          _pulseController.value,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    const Text(
-                      'LIVE',
-                      style: TextStyle(
-                        color: Color(0xFF00E676),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            if (_lastUpdatedAt != null) ...[
-              const SizedBox(width: 10),
-              Text(
-                _formatUpdatedTime(_lastUpdatedAt!),
-                style: const TextStyle(color: Color(0xFF3A5070), fontSize: 11),
-              ),
-            ],
-          ],
-        ),
-      ],
-    );
-  }
+      ),
+      IconButton(
+        icon: const Icon(Icons.currency_exchange, color: Colors.white70),
+        onPressed: () {
+          // TODO: Navigasi ke Konverter Mata Uang
+        },
+      ),
+    ],
+  );
+}
 
   // ─────────────────────────────────────────────
   // ASSET LIST
