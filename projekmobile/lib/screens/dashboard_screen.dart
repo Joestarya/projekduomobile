@@ -886,7 +886,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               const Text(
                 'Total Portofolio',
                 style: TextStyle(
-                  color: Color(0xFF7A90B0),
+                  color: Color(0xFFFFFFFF),
                   fontSize: 13,
                   letterSpacing: 0.5,
                 ),
@@ -955,10 +955,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
               const SizedBox(width: 8),
-              const Text(
-                'Hari ini',
-                style: TextStyle(color: Color(0xFF3A5070), fontSize: 12),
-              ),
+             
             ],
           ),
           const SizedBox(height: 12),
