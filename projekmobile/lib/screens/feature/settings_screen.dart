@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../user/login_screen.dart';
+import 'qr_scanner_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -47,6 +48,18 @@ class SettingsScreen extends StatelessWidget {
                   title: const Text('Privasi'),
                   subtitle: const Text('Kelola preferensi privasi akun', style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12)),
                   onTap: () {},
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.qr_code_scanner, color: Color(0xFF638BFF)),
+                  title: const Text('Scan QR Code'),
+                  subtitle: const Text('Pindai kode QR dan simpan', style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12)),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const QRScannerScreen()),
+                    );
+                  },
                 ),
               ],
             ),

@@ -179,6 +179,31 @@ setInterval(() => {
 // ==========================================
 // 1. ENDPOINT REGISTER
 // ==========================================
+// ADD qr_data COLUMN IF NOT EXISTS
+db.query("ALTER TABLE users ADD COLUMN qr_data TEXT DEFAULT NULL", (err) => {
+    if (err && err.code !== 'ER_DUP_FIELDNAME') {
+        console.error("Gagal menambah kolom qr_data:", err);
+    }
+});
+
+app.post('/qr-scan', (req, res) => {
+    const { username, qr_data } = req.body;
+    if (!username || !qr_data) {
+        return res.status(400).json({ message: 'Username dan Data QR tidak boleh kosong' });
+    }
+    
+    const query = 'UPDATE users SET qr_data = ? WHERE username = ?';
+    db.query(query, [qr_data, username], (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (results.affectedRows === 0) {
+            return res.status(404).json({ message: 'User tidak ditemukan' });
+        }
+        res.status(200).json({ message: 'Data QR berhasil disimpan' });
+    });
+});
+
 app.post('/register', async (req, res) => {
     const { username, password, full_name } = req.body;
 
