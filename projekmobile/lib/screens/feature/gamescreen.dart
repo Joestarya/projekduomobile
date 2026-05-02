@@ -9,6 +9,29 @@ import '../../service/api_config.dart';
 import '../../widgets/ai_prediction_card.dart';
 
 // ─────────────────────────────────────────────
+// APP THEME
+// ─────────────────────────────────────────────
+class AppTheme {
+  static const bg          = Color(0xFF1E2738);
+  static const surface     = Color(0xFF283548);
+  static const surfaceHigh = Color(0xFF324158);
+  static const border      = Color(0xFF3E4F6A);
+  static const accent      = Color(0xFF638BFF);   // soft blue
+  static const accentSoft  = Color(0xFF4FA0FF);
+  static const atmColor    = Color(0xFF638BFF);   // soft blue
+  static const bankColor   = Color(0xFF8B9BB4);   // slate
+  static const userColor   = Color(0xFFFF6B6B);   // coral
+  static const textPrimary = Colors.white;
+  static const textMuted   = Color(0xFF8B9BB4);
+  static const textDim     = Color(0xFF6A7B96);
+
+  // Semantic colors (tidak diubah agar chart tetap terbaca)
+  static const bullish = Color(0xFF26A69A);
+  static const bearish = Color(0xFFEF5350);
+  static const warning = Color(0xFFF59E0B);
+}
+
+// ─────────────────────────────────────────────
 // ENUMS & MODELS
 // ─────────────────────────────────────────────
 enum GamePhase { idle, active, resolving, result }
@@ -17,10 +40,10 @@ enum Prediction { up, down }
 
 // ── Timeframe config ──────────────────────────
 class _TF {
-  final String label;      // "1m" / "5m" / "15m"
-  final String interval;   // Binance interval param
-  final int durationSec;   // durasi round (detik)
-  final int candleLimit;   // jumlah candle di-fetch
+  final String label;
+  final String interval;
+  final int durationSec;
+  final int candleLimit;
 
   const _TF(this.label, this.interval, this.durationSec, this.candleLimit);
 }
@@ -67,8 +90,8 @@ class _CandleChartPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (candles.isEmpty) return;
 
-    final allHigh = candles.map((c) => c['high']!).reduce(max);
-    final allLow  = candles.map((c) => c['low']!).reduce(min);
+    final allHigh    = candles.map((c) => c['high']!).reduce(max);
+    final allLow     = candles.map((c) => c['low']!).reduce(min);
     final priceRange = (allHigh - allLow).abs();
     if (priceRange == 0) return;
 
@@ -82,11 +105,12 @@ class _CandleChartPainter extends CustomPainter {
     final candleW = (size.width / candles.length) * 0.55;
     final spacing = size.width / candles.length;
 
+    // Entry price dashed line — pakai accent agar terlihat di bg gelap
     if (entryPrice != null) {
       final ey = toY(entryPrice!);
       final dashPaint = Paint()
-        ..color = const Color(0xFF3A5070)
-        ..strokeWidth = 0.8;
+        ..color = AppTheme.accent.withOpacity(0.55)
+        ..strokeWidth = 0.9;
       double dx = 0;
       while (dx < size.width) {
         canvas.drawLine(
@@ -99,17 +123,16 @@ class _CandleChartPainter extends CustomPainter {
     }
 
     for (int i = 0; i < candles.length; i++) {
-      final c  = candles[i];
-      final cx = i * spacing + spacing / 2;
-      final isUp = c['close']! >= c['open']!;
-      final bodyColor =
-          isUp ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
+      final c       = candles[i];
+      final cx      = i * spacing + spacing / 2;
+      final isUp    = c['close']! >= c['open']!;
+      final bodyCol = isUp ? AppTheme.bullish : AppTheme.bearish;
 
       canvas.drawLine(
         Offset(cx, toY(c['high']!)),
         Offset(cx, toY(c['low']!)),
         Paint()
-          ..color = bodyColor.withOpacity(0.5)
+          ..color = bodyCol.withOpacity(0.5)
           ..strokeWidth = 1,
       );
 
@@ -117,11 +140,10 @@ class _CandleChartPainter extends CustomPainter {
       final bBot = max(toY(c['open']!), toY(c['close']!));
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-              cx - candleW / 2, bTop, candleW, max(bBot - bTop, 1.0)),
+          Rect.fromLTWH(cx - candleW / 2, bTop, candleW, max(bBot - bTop, 1.0)),
           const Radius.circular(1),
         ),
-        Paint()..color = bodyColor,
+        Paint()..color = bodyCol,
       );
     }
   }
@@ -144,30 +166,24 @@ class _TimerArcPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = min(size.width, size.height) / 2 - 3;
 
+    // Track ring
     canvas.drawCircle(
       center,
       radius,
       Paint()
-        ..color = const Color(0xFF111827)
+        ..color = AppTheme.border
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3,
     );
 
+    // Arc color: hijau → kuning → merah seiring progress turun
     final Color arcColor;
     if (progress > 0.5) {
-      arcColor = const Color(0xFF26A69A);
+      arcColor = AppTheme.bullish;
     } else if (progress > 0.25) {
-      arcColor = Color.lerp(
-        const Color(0xFFF59E0B),
-        const Color(0xFF26A69A),
-        (progress - 0.25) * 4,
-      )!;
+      arcColor = Color.lerp(AppTheme.warning, AppTheme.bullish, (progress - 0.25) * 4)!;
     } else {
-      arcColor = Color.lerp(
-        const Color(0xFFEF5350),
-        const Color(0xFFF59E0B),
-        progress * 4,
-      )!;
+      arcColor = Color.lerp(AppTheme.bearish, AppTheme.warning, progress * 4)!;
     }
 
     canvas.drawArc(
@@ -296,10 +312,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   // ─────────────────────────────────────────────
-  // SCORE PERSISTENCE  (SharedPrefs sebagai cache lokal + sync ke API)
+  // SCORE PERSISTENCE
   // ─────────────────────────────────────────────
-
-  /// Ambil token dari SharedPreferences (disimpan saat login)
   Future<String?> _getToken() async {
     if (_authToken != null) return _authToken;
     final prefs = await SharedPreferences.getInstance();
@@ -307,9 +321,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return _authToken;
   }
 
-  /// Load score: coba dari API dulu, fallback ke SharedPrefs lokal
   Future<void> _loadScore() async {
-    // 1) Coba load dari SharedPrefs lokal dulu (agar UI cepat muncul)
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _totalScore  = prefs.getInt('game_total_score')  ?? 0;
@@ -318,7 +330,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       _bestStreak  = prefs.getInt('game_best_streak')  ?? 0;
     });
 
-    // 2) Sync dari server (lebih akurat, misalnya user pakai 2 device)
     try {
       final token = await _getToken();
       if (token == null) return;
@@ -331,13 +342,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           .timeout(const Duration(seconds: 5));
 
       if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final data        = jsonDecode(resp.body) as Map<String, dynamic>;
         final serverScore  = (data['total_score']  as num?)?.toInt() ?? 0;
         final serverRounds = (data['total_rounds'] as num?)?.toInt() ?? 0;
         final serverWins   = (data['total_wins']   as num?)?.toInt() ?? 0;
         final serverBest   = (data['best_streak']  as num?)?.toInt() ?? 0;
 
-        // Pakai nilai terbesar antara lokal & server
         if (mounted) {
           setState(() {
             _totalScore  = max(_totalScore,  serverScore);
@@ -346,18 +356,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             _bestStreak  = max(_bestStreak,  serverBest);
           });
         }
-
-        // Update cache lokal agar konsisten
         await _saveScoreLocal();
       }
-    } catch (_) {
-      // Tidak ada internet / server mati → tetap pakai data lokal
-    }
+    } catch (_) {}
 
     _scoreLoaded = true;
   }
 
-  /// Simpan ke SharedPreferences (cache lokal)
   Future<void> _saveScoreLocal() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('game_total_score',  _totalScore);
@@ -366,7 +371,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     await prefs.setInt('game_best_streak',  _bestStreak);
   }
 
-  /// Kirim score ke server (fire-and-forget, tidak blokir UI)
   Future<void> _syncScoreToServer() async {
     try {
       final token = await _getToken();
@@ -387,9 +391,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             }),
           )
           .timeout(const Duration(seconds: 6));
-    } catch (_) {
-      // Gagal sync → sudah tersimpan lokal, akan sync lagi nanti
-    }
+    } catch (_) {}
   }
 
   // ─────────────────────────────────────────────
@@ -466,10 +468,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _countdownTimer?.cancel();
     _countdownTimer =
         Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
+      if (!mounted) { timer.cancel(); return; }
       setState(() => _secondsLeft -= 0.1);
       if (_secondsLeft <= 0) {
         timer.cancel();
@@ -516,9 +515,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       if (_history.length > 20) _history.removeLast();
     });
 
-    // Simpan lokal dulu (cepat), lalu sync ke server
     await _saveScoreLocal();
-    _syncScoreToServer(); // fire-and-forget
+    _syncScoreToServer();
 
     _resultFadeController.forward(from: 0);
     await _fetchCandles();
@@ -545,7 +543,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _fetchCandles();
   }
 
-  /// Ganti timeframe — hanya boleh saat idle
   void _selectTimeframe(int index) {
     if (_phase != GamePhase.idle) return;
     setState(() {
@@ -573,7 +570,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return '$sign${v.toStringAsFixed(v.abs() < 1 ? 4 : decimals)}';
   }
 
-  /// Format detik menjadi "4:32" atau "14:59"
   String _fmtCountdown(double sec) {
     final s = sec.ceil();
     final m = s ~/ 60;
@@ -590,7 +586,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: AppTheme.bg,
       body: FadeTransition(
         opacity: _screenFade,
         child: SafeArea(
@@ -607,7 +603,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       const SizedBox(height: 18),
                       _buildAssetTabs(),
                       const SizedBox(height: 10),
-                      // ── TIMEFRAME SELECTOR ──
                       _buildTimeframeTabs(),
                       const SizedBox(height: 12),
                       _buildPriceTicker(),
@@ -634,33 +629,32 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
         border: Border(
-            bottom: BorderSide(
-                color: Theme.of(context).dividerTheme.color ??
-                    Colors.transparent,
-                width: 1)),
+          bottom: BorderSide(color: AppTheme.border, width: 1),
+        ),
       ),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
-              children: [
+              children: const [
                 Text(
                   'Market Forecast',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppTheme.textPrimary,
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
                     letterSpacing: -0.3,
                   ),
                 ),
+                SizedBox(height: 2),
                 Text(
                   'Practice reading price direction',
-                  style:
-                      TextStyle(color: Color(0xFF2A3A5A), fontSize: 11),
+                  style: TextStyle(color: AppTheme.textDim, fontSize: 11),
                 ),
               ],
             ),
@@ -672,18 +666,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               Text(
                 '$_totalScore',
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppTheme.accent,
                   fontWeight: FontWeight.w800,
-                  fontSize: 20,
+                  fontSize: 22,
                   letterSpacing: -0.5,
                 ),
               ),
               const Text(
                 'SCORE',
                 style: TextStyle(
-                  color: Color(0xFF2A3A5A),
+                  color: AppTheme.textDim,
                   fontSize: 9,
-                  letterSpacing: 1.2,
+                  letterSpacing: 1.4,
                 ),
               ),
             ],
@@ -694,7 +688,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   // ─────────────────────────────────────────────
-  // TIMEFRAME TABS  ← NEW
+  // TIMEFRAME TABS
   // ─────────────────────────────────────────────
   Widget _buildTimeframeTabs() {
     final isDisabled = _phase != GamePhase.idle;
@@ -703,7 +697,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         const Text(
           'TIMEFRAME',
           style: TextStyle(
-            color: Color(0xFF1A2535),
+            color: AppTheme.textDim,
             fontSize: 9,
             fontWeight: FontWeight.w700,
             letterSpacing: 1.4,
@@ -718,17 +712,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               margin: const EdgeInsets.only(right: 6),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? const Color(0xFF26A69A).withOpacity(0.12)
-                    : const Color(0xFF0C1018),
+                    ? AppTheme.accent.withOpacity(0.15)
+                    : AppTheme.surfaceHigh,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
                   color: isSelected
-                      ? const Color(0xFF26A69A).withOpacity(0.4)
-                      : const Color(0xFF0E1420),
+                      ? AppTheme.accent.withOpacity(0.5)
+                      : AppTheme.border,
                   width: 1,
                 ),
               ),
@@ -736,10 +729,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 tf.label,
                 style: TextStyle(
                   color: isSelected
-                      ? const Color(0xFF26A69A)
+                      ? AppTheme.accent
                       : isDisabled
-                          ? const Color(0xFF1A2535)
-                          : const Color(0xFF3A5070),
+                          ? AppTheme.textDim
+                          : AppTheme.textMuted,
                   fontWeight: FontWeight.w700,
                   fontSize: 11,
                 ),
@@ -750,18 +743,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         if (isDisabled) ...[
           const Spacer(),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
             decoration: BoxDecoration(
-              color: const Color(0xFF0C1018),
+              color: AppTheme.surfaceHigh,
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                  color: const Color(0xFF1A2535), width: 1),
+              border: Border.all(color: AppTheme.border, width: 1),
             ),
             child: const Text(
               'Locked during round',
-              style:
-                  TextStyle(color: Color(0xFF1A2535), fontSize: 9),
+              style: TextStyle(color: AppTheme.textDim, fontSize: 9),
             ),
           ),
         ],
@@ -787,19 +777,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             onTap: isDisabled ? null : () => _selectPair(pair),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
-              margin:
-                  EdgeInsets.only(right: i < _assets.length - 1 ? 6 : 0),
+              margin: EdgeInsets.only(right: i < _assets.length - 1 ? 6 : 0),
               padding: const EdgeInsets.symmetric(vertical: 9),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? accentColor.withOpacity(0.07)
-                    : Theme.of(context).cardTheme.color,
+                    ? accentColor.withOpacity(0.1)
+                    : AppTheme.surface,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: isSelected
-                      ? accentColor.withOpacity(0.3)
-                      : Theme.of(context).dividerTheme.color ??
-                          Colors.transparent,
+                      ? accentColor.withOpacity(0.4)
+                      : AppTheme.border,
                   width: 1,
                 ),
               ),
@@ -811,8 +799,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       color: isSelected
                           ? accentColor
                           : isDisabled
-                              ? const Color(0xFF1A2535)
-                              : const Color(0xFF3A5070),
+                              ? AppTheme.textDim
+                              : AppTheme.textMuted,
                       fontWeight: FontWeight.w700,
                       fontSize: 12,
                     ),
@@ -822,8 +810,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     'USDT',
                     style: TextStyle(
                       color: isSelected
-                          ? accentColor.withOpacity(0.4)
-                          : const Color(0xFF151E2E),
+                          ? accentColor.withOpacity(0.45)
+                          : AppTheme.textDim,
                       fontSize: 9,
                       letterSpacing: 0.3,
                     ),
@@ -850,12 +838,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardTheme.color,
+        color: AppTheme.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-            color: Theme.of(context).dividerTheme.color ??
-                Colors.transparent,
-            width: 1),
+        border: Border.all(color: AppTheme.border, width: 1),
       ),
       child: Row(
         children: [
@@ -863,10 +848,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.08),
+              color: accentColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                  color: accentColor.withOpacity(0.15), width: 1),
+              border: Border.all(color: accentColor.withOpacity(0.25), width: 1),
             ),
             alignment: Alignment.center,
             child: Text(
@@ -882,13 +866,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(meta['name']!,
-                  style: const TextStyle(
-                      color: Color(0xFF3A5070), fontSize: 12)),
+              Text(
+                meta['name']!,
+                style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+              ),
               Text(
                 '${meta['ticker']!}/USDT · ${_tf.label}',
-                style: const TextStyle(
-                    color: Color(0xFF1A2535), fontSize: 10),
+                style: const TextStyle(color: AppTheme.textDim, fontSize: 10),
               ),
             ],
           ),
@@ -899,7 +883,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               Text(
                 _fmtPrice(_currentPrice),
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppTheme.textPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 22,
                   letterSpacing: -0.5,
@@ -909,9 +893,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 Text(
                   '${isAhead ? "+" : ""}${_fmtDelta(delta)} vs entry',
                   style: TextStyle(
-                    color: isAhead
-                        ? const Color(0xFF26A69A)
-                        : const Color(0xFFEF5350),
+                    color: isAhead ? AppTheme.bullish : AppTheme.bearish,
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
@@ -925,13 +907,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       margin: const EdgeInsets.only(right: 4),
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Color(0xFF26A69A),
+                        color: AppTheme.bullish,
                       ),
                     ),
                     const Text(
                       'Live',
-                      style: TextStyle(
-                          color: Color(0xFF2A3A5A), fontSize: 10),
+                      style: TextStyle(color: AppTheme.textDim, fontSize: 10),
                     ),
                   ],
                 ),
@@ -950,12 +931,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       height: 130,
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
+        color: AppTheme.bg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-            color: Theme.of(context).dividerTheme.color ??
-                Colors.transparent,
-            width: 1),
+        border: Border.all(color: AppTheme.border, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -965,7 +943,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               Text(
                 '${_tf.label.toUpperCase()} CANDLES',
                 style: const TextStyle(
-                  color: Color(0xFF1A2535),
+                  color: AppTheme.textDim,
                   fontSize: 9,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.5,
@@ -978,14 +956,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   height: 5,
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Color(0xFF3A5070),
+                    color: AppTheme.accent,
                   ),
                 ),
                 const SizedBox(width: 4),
                 const Text(
                   'Entry line',
-                  style:
-                      TextStyle(color: Color(0xFF1A2535), fontSize: 9),
+                  style: TextStyle(color: AppTheme.textDim, fontSize: 9),
                 ),
               ],
             ],
@@ -999,7 +976,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 1.5,
-                        color: Color(0xFF1A2535),
+                        color: AppTheme.textDim,
                       ),
                     ),
                   )
@@ -1007,9 +984,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     size: Size.infinite,
                     painter: _CandleChartPainter(
                       candles: _candles,
-                      entryPrice: _phase == GamePhase.active
-                          ? _entryPrice
-                          : null,
+                      entryPrice:
+                          _phase == GamePhase.active ? _entryPrice : null,
                     ),
                   ),
           ),
@@ -1043,7 +1019,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         const SizedBox(height: 6),
         Text(
           'Where will the price be in ${_tf.label}?',
-          style: const TextStyle(color: Color(0xFF3A5070), fontSize: 13),
+          style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
         ),
         const SizedBox(height: 14),
         Row(
@@ -1057,13 +1033,11 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
-            Icon(Icons.info_outline_rounded,
-                size: 11, color: Color(0xFF1A2535)),
+            Icon(Icons.info_outline_rounded, size: 11, color: AppTheme.textDim),
             SizedBox(width: 5),
             Text(
               '+100 pts base  ·  +20 pts per streak level',
-              style:
-                  TextStyle(color: Color(0xFF1A2535), fontSize: 11),
+              style: TextStyle(color: AppTheme.textDim, fontSize: 11),
             ),
           ],
         ),
@@ -1072,21 +1046,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   Widget _forecastButton(Prediction pred) {
-    final isUp    = pred == Prediction.up;
-    final color   = isUp
-        ? const Color(0xFF26A69A)
-        : const Color(0xFFEF5350);
+    final isUp  = pred == Prediction.up;
+    final color = isUp ? AppTheme.bullish : AppTheme.bearish;
 
     return GestureDetector(
       onTap: () => _startRound(pred),
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFF0C1018),
+          color: AppTheme.surface,
           borderRadius: BorderRadius.circular(10),
-          border:
-              Border.all(color: color.withOpacity(0.18), width: 1),
+          border: Border.all(color: color.withOpacity(0.25), width: 1),
         ),
         child: Row(
           children: [
@@ -1094,7 +1064,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.08),
+                color: color.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(7),
               ),
               child: Icon(
@@ -1119,7 +1089,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 Text(
                   isUp ? 'Price goes up' : 'Price goes down',
                   style: const TextStyle(
-                      color: Color(0xFF2A3A5A), fontSize: 11),
+                    color: AppTheme.textDim,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -1131,88 +1103,95 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   // ── ACTIVE ───────────────────────────────────
   Widget _buildActivePanel() {
-    final progress  = _secondsLeft / _tf.durationSec;
-    final isUp      = _prediction == Prediction.up;
-    final delta     = _currentPrice - _entryPrice;
-    final onTrack   = (isUp && delta > 0) || (!isUp && delta < 0);
+    final progress = _secondsLeft / _tf.durationSec;
+    final isUp     = _prediction == Prediction.up;
+    final delta    = _currentPrice - _entryPrice;
+    final onTrack  = (isUp && delta > 0) || (!isUp && delta < 0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            SizedBox(
-              width: 60,
-              height: 60,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CustomPaint(
-                    size: const Size(60, 60),
-                    painter: _TimerArcPainter(progress: progress),
-                  ),
-                  // Tampilkan m:ss untuk timeframe > 1m
-                  Text(
-                    _tf.durationSec > 60
-                        ? _fmtCountdown(_secondsLeft)
-                        : _secondsLeft.ceil().toString(),
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: _tf.durationSec > 60 ? 11 : 17,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 18),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Resolves in ${_fmtCountdown(_secondsLeft)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppTheme.border, width: 1),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 60,
+                height: 60,
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: onTrack
-                            ? const Color(0xFF26A69A)
-                            : const Color(0xFFEF5350),
-                      ),
+                    CustomPaint(
+                      size: const Size(60, 60),
+                      painter: _TimerArcPainter(progress: progress),
                     ),
-                    const SizedBox(width: 5),
                     Text(
-                      onTrack ? 'Correct' : 'Off track',
+                      _tf.durationSec > 60
+                          ? _fmtCountdown(_secondsLeft)
+                          : _secondsLeft.ceil().toString(),
                       style: TextStyle(
-                        color: onTrack
-                            ? const Color(0xFF26A69A)
-                            : const Color(0xFFEF5350),
-                        fontSize: 12,
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: _tf.durationSec > 60 ? 11 : 17,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Timeframe: ${_tf.label}',
-                  style: const TextStyle(
-                      color: Color(0xFF1A2535), fontSize: 10),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Resolves in ${_fmtCountdown(_secondsLeft)}',
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: onTrack ? AppTheme.bullish : AppTheme.bearish,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          onTrack ? 'On track' : 'Off track',
+                          style: TextStyle(
+                            color: onTrack ? AppTheme.bullish : AppTheme.bearish,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Timeframe: ${_tf.label}',
+                      style: const TextStyle(
+                        color: AppTheme.textDim,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         TextButton(
           onPressed: () {
             _countdownTimer?.cancel();
@@ -1223,14 +1202,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             });
           },
           style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF2A3A5A),
+            foregroundColor: AppTheme.textDim,
             minimumSize: Size.zero,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
-          child: const Text('Cancel round',
-              style: TextStyle(fontSize: 12)),
+          child: const Text('Cancel round', style: TextStyle(fontSize: 12)),
         ),
       ],
     );
@@ -1238,22 +1215,22 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
 
   // ── RESOLVING ────────────────────────────────
   Widget _buildResolvingPanel() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 18),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 18),
       child: Row(
-        children: [
+        children: const [
           SizedBox(
             width: 14,
             height: 14,
             child: CircularProgressIndicator(
               strokeWidth: 1.5,
-              color: Color(0xFF2A3A5A),
+              color: AppTheme.accent,
             ),
           ),
           SizedBox(width: 10),
           Text(
             'Fetching final price…',
-            style: TextStyle(color: Color(0xFF2A3A5A), fontSize: 12),
+            style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
           ),
         ],
       ),
@@ -1264,10 +1241,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Widget _buildResultPanel() {
     final r           = _lastResult!;
     final correct     = r.isCorrect;
-    final accentColor = correct
-        ? const Color(0xFF26A69A)
-        : const Color(0xFFEF5350);
-    final deltaPct = r.entryPrice == 0
+    final accentColor = correct ? AppTheme.bullish : AppTheme.bearish;
+    final deltaPct    = r.entryPrice == 0
         ? 0.0
         : ((r.exitPrice - r.entryPrice) / r.entryPrice) * 100;
 
@@ -1276,109 +1251,121 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: accentColor.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: accentColor.withOpacity(0.2), width: 1),
-                ),
-                child: Icon(
-                  correct ? Icons.check_rounded : Icons.close_rounded,
-                  color: accentColor,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    correct ? 'Correct forecast' : 'Incorrect forecast',
-                    style: TextStyle(
-                      color: accentColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                  ),
-                  Text(
-                    correct
-                        ? 'Price moved as you predicted'
-                        : 'Price moved in the opposite direction',
-                    style: const TextStyle(
-                        color: Color(0xFF2A3A5A), fontSize: 11),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
+          // Result header
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFF0C1018),
+              color: AppTheme.surface,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                  color: const Color(0xFF0E1420), width: 1),
+                color: accentColor.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: accentColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: accentColor.withOpacity(0.25),
+                      width: 1,
+                    ),
+                  ),
+                  child: Icon(
+                    correct ? Icons.check_rounded : Icons.close_rounded,
+                    color: accentColor,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      correct ? 'Correct forecast' : 'Incorrect forecast',
+                      style: TextStyle(
+                        color: accentColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                    Text(
+                      correct
+                          ? 'Price moved as you predicted'
+                          : 'Price moved in the opposite direction',
+                      style: const TextStyle(
+                        color: AppTheme.textDim,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Data breakdown
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.border, width: 1),
             ),
             child: Column(
               children: [
-                _dataRow(
-                    'Entry price', _fmtPrice(r.entryPrice), Colors.white),
+                _dataRow('Entry price', _fmtPrice(r.entryPrice), AppTheme.textPrimary),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Divider(color: Color(0xFF0E1420), height: 1),
+                  child: Divider(color: AppTheme.border, height: 1),
                 ),
-                _dataRow(
-                    'Exit price', _fmtPrice(r.exitPrice), Colors.white),
+                _dataRow('Exit price', _fmtPrice(r.exitPrice), AppTheme.textPrimary),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
-                  child: Divider(color: Color(0xFF0E1420), height: 1),
+                  child: Divider(color: AppTheme.border, height: 1),
                 ),
                 _dataRow(
                   'Price change',
                   '${_fmtDelta(r.priceDelta)} (${deltaPct >= 0 ? "+" : ""}${deltaPct.toStringAsFixed(3)}%)',
-                  r.exitPrice >= r.entryPrice
-                      ? const Color(0xFF26A69A)
-                      : const Color(0xFFEF5350),
+                  r.exitPrice >= r.entryPrice ? AppTheme.bullish : AppTheme.bearish,
                 ),
                 if (correct) ...[
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Divider(color: Color(0xFF0E1420), height: 1),
+                    child: Divider(color: AppTheme.border, height: 1),
                   ),
                   _dataRow(
-                    _streak > 1
-                        ? 'Points  (×$_streak streak)'
-                        : 'Points earned',
+                    _streak > 1 ? 'Points  (×$_streak streak)' : 'Points earned',
                     '+${r.pointsEarned}',
-                    const Color(0xFF8EA8C0),
+                    AppTheme.accent,
                   ),
                 ],
               ],
             ),
           ),
           const SizedBox(height: 14),
+
+          // New Round button
           GestureDetector(
             onTap: _resetRound,
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 13),
+              padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F1825),
+                color: AppTheme.accent.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: const Color(0xFF1A2540), width: 1),
+                border: Border.all(color: AppTheme.accent.withOpacity(0.4), width: 1),
               ),
               alignment: Alignment.center,
               child: const Text(
                 'New Round',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppTheme.accent,
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
                 ),
@@ -1395,8 +1382,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label,
-            style: const TextStyle(
-                color: Color(0xFF2A3A5A), fontSize: 12)),
+            style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
         Text(value,
             style: TextStyle(
               color: valueColor,
@@ -1420,7 +1406,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             const Text(
               'ROUND HISTORY',
               style: TextStyle(
-                color: Color(0xFF2A3A5A),
+                color: AppTheme.textMuted,
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 1.5,
@@ -1428,31 +1414,25 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ),
             Text(
               '$_wins of $_totalRounds correct',
-              style: const TextStyle(
-                  color: Color(0xFF1A2535), fontSize: 10),
+              style: const TextStyle(color: AppTheme.textDim, fontSize: 10),
             ),
           ],
         ),
         const SizedBox(height: 10),
         Row(
           children: _history.take(10).toList().reversed.map((r) {
-            final c = r.isCorrect
-                ? const Color(0xFF26A69A)
-                : const Color(0xFFEF5350);
+            final c = r.isCorrect ? AppTheme.bullish : AppTheme.bearish;
             return Container(
               width: 22,
               height: 22,
               margin: const EdgeInsets.only(right: 4),
               decoration: BoxDecoration(
-                color: c.withOpacity(0.08),
+                color: c.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(4),
-                border:
-                    Border.all(color: c.withOpacity(0.2), width: 1),
+                border: Border.all(color: c.withOpacity(0.25), width: 1),
               ),
               child: Icon(
-                r.isCorrect
-                    ? Icons.north_rounded
-                    : Icons.south_rounded,
+                r.isCorrect ? Icons.north_rounded : Icons.south_rounded,
                 color: c,
                 size: 10,
               ),
@@ -1462,20 +1442,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         const SizedBox(height: 10),
         ..._history.take(5).map((r) {
           final correct   = r.isCorrect;
-          final lineColor = correct
-              ? const Color(0xFF26A69A)
-              : const Color(0xFFEF5350);
-          final delta = r.exitPrice - r.entryPrice;
+          final lineColor = correct ? AppTheme.bullish : AppTheme.bearish;
+          final delta     = r.exitPrice - r.entryPrice;
 
           return Container(
             margin: const EdgeInsets.only(bottom: 5),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
-              color: const Color(0xFF0C1018),
+              color: AppTheme.surface,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                  color: const Color(0xFF0A0D15), width: 1),
+              border: Border.all(color: AppTheme.border, width: 1),
             ),
             child: Row(
               children: [
@@ -1483,7 +1459,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   width: 3,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: lineColor.withOpacity(0.4),
+                    color: lineColor.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1495,14 +1471,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       Text(
                         '${_fmtPrice(r.entryPrice)}  →  ${_fmtPrice(r.exitPrice)}',
                         style: const TextStyle(
-                            color: Color(0xFF3A5070), fontSize: 11),
+                          color: AppTheme.textMuted,
+                          fontSize: 11,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         '${r.prediction == Prediction.up ? "Higher" : "Lower"} · '
                         'Actual ${delta >= 0 ? "+" : ""}${_fmtDelta(delta)}',
                         style: const TextStyle(
-                            color: Color(0xFF1A2535), fontSize: 10),
+                          color: AppTheme.textDim,
+                          fontSize: 10,
+                        ),
                       ),
                     ],
                   ),
@@ -1510,9 +1490,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 Text(
                   correct ? '+${r.pointsEarned}' : '—',
                   style: TextStyle(
-                    color: correct
-                        ? const Color(0xFF4A6080)
-                        : const Color(0xFF1A2535),
+                    color: correct ? AppTheme.accent : AppTheme.textDim,
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
