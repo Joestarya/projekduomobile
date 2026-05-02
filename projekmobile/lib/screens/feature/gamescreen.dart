@@ -925,8 +925,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Widget _buildActivePanel() {
     final progress = _secondsLeft / _roundSeconds;
     final isUp = _prediction == Prediction.up;
-    final predColor =
-        isUp ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
+    final predColor = isUp ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
     final delta = _currentPrice - _entryPrice;
     final onTrack = (isUp && delta > 0) || (!isUp && delta < 0);
 

@@ -4,9 +4,23 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 require('dotenv').config({ override: true });
 const db = require('./db');
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_URL =
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' + GEMINI_API_KEY;
+
+// --- TAMBAHAN UNTUK GEMINI ---
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// Gunakan fallback empty string agar tidak crash jika .env belum terbaca
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : '';
+
+console.log("Key Terbaca:", GEMINI_API_KEY ? "Ya" : "Tidak");
+if (GEMINI_API_KEY) {
+    console.log("Panjang Key:", GEMINI_API_KEY.length);
+    console.log("Karakter Pertama:", GEMINI_API_KEY[0]);
+}
+
+// Inisialisasi SDK Gemini (Pengganti URL manual yang rawan error)
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+// -----------------------------
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -190,7 +204,7 @@ db.query("ALTER TABLE users ADD COLUMN qr_data TEXT DEFAULT NULL", (err) => {
 
 app.post('/qr-scan', (req, res) => {
     const { user_id, username, full_name, qr_data } = req.body;
-       
+        
     if ((!user_id || String(user_id).trim() === '') && (!username || username.trim() === '') && (!full_name || full_name.trim() === '')) {
         return res.status(400).json({ message: 'Identitas user tidak boleh kosong' });
     }
@@ -315,29 +329,20 @@ Based on the data above:
 Respond ONLY in this exact JSON format (no markdown, no extra text):
 {"direction":"UP","confidence":"MEDIUM","reasoning":"Momentum 15 menit terakhir positif dengan volume meningkat. Harga berpotensi melanjutkan kenaikan jangka pendek."}`;
  
-        // 5. Kirim ke Gemini API
-        const geminiResp = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                    temperature: 0.3,        // rendah = lebih konsisten
-                    maxOutputTokens: 200,
-                },
-            }),
+        // 5. Kirim ke Gemini API MENGGUNAKAN SDK
+        const geminiModel = genAI.getGenerativeModel({
+            model: "gemini-flash-latest",
+            generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 1000, // <-- Naikkan batas token agar tidak terpotong
+                responseMimeType: "application/json", // <-- Paksa Gemini merespons JSON utuh
+            }
         });
- 
-        if (!geminiResp.ok) {
-            const errText = await geminiResp.text();
-            console.error('[Gemini] API error:', errText);
-            return res.status(502).json({ message: 'Gemini API error', detail: errText });
-        }
- 
-        const geminiData = await geminiResp.json();
+
+        const geminiResp = await geminiModel.generateContent(prompt);
+        const rawText = geminiResp.response.text();
  
         // 6. Parse response Gemini
-        const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
         let prediction;
         try {
             // Bersihkan kalau ada markdown code block
