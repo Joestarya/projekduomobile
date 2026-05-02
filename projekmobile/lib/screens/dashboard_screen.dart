@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:sensors_plus/sensors_plus.dart';
 import '../service/api_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'feature/price_alert_screen.dart';
 // ─────────────────────────────────────────────
 // MODEL
 // ─────────────────────────────────────────────
@@ -725,7 +726,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
                 // Clock
                 Flexible(child: _buildClockWidget(isCompact: isCompact)),
-                
+                IconButton(
+                icon: const Icon(Icons.notifications_active_rounded, color: Colors.white),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PriceAlertScreen(
+                      livePrices: {
+                        for (final a in _assets) a.symbol: a.priceUsd,
+                      },
+                    ),
+                  ),
+                ),
+              ),
               ],
             ),
           ),

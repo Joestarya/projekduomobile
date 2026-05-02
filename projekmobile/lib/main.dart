@@ -3,9 +3,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'service/biometric_auth_service.dart';
 import 'screens/user/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'service/price_alert_service.dart';
 
-void main() {
-  runApp(MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await PriceAlertService.init(); // ← tambah ini
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -100,43 +103,41 @@ class _AuthGateState extends State<AuthGate> {
     super.initState();
     _checkAuth();
   }
+Future<void> _checkAuth() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('token');
+  final hasToken = token != null && token.isNotEmpty;
 
-  Future<void> _checkAuth() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    final hasToken = token != null && token.isNotEmpty;
+  if (!hasToken) {
+    if (!mounted) return;
+    setState(() { _isLoading = false; _isAuthenticated = false; });
+    return;
+  }
 
-    if (!hasToken) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _isAuthenticated = false;
-      });
-      return;
-    }
+  final userId = prefs.getString('user_id') ?? ''; // ← tambah ini
 
-    final biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
-    if (biometricEnabled) {
-      final isAuthenticated = await BiometricAuthService.authenticate(
-        reason: 'Verifikasi biometrik untuk membuka aplikasi',
-      );
+  final biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
+  if (biometricEnabled) {
+    final isAuthenticated = await BiometricAuthService.authenticate(
+      reason: 'Verifikasi biometrik untuk membuka aplikasi',
+    );
 
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        
-        _isAuthenticated = isAuthenticated;
-      });
-      return;
+    if (isAuthenticated && userId.isNotEmpty) {
+      PriceAlertService.startPolling(userId); // ← tambah ini
     }
 
     if (!mounted) return;
-    setState(() {
-      _isLoading = false;
-      _isAuthenticated = true;
-    });
+    setState(() { _isLoading = false; _isAuthenticated = isAuthenticated; });
+    return;
   }
 
+  if (userId.isNotEmpty) {
+    PriceAlertService.startPolling(userId); // ← tambah ini
+  }
+
+  if (!mounted) return;
+  setState(() { _isLoading = false; _isAuthenticated = true; });
+}
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {

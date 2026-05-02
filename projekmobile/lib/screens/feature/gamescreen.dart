@@ -61,6 +61,7 @@ class RoundResult {
   final double exitPrice;
   final bool isCorrect;
   final int pointsEarned;
+  final int pointsLost;
   final DateTime timestamp;
 
   const RoundResult({
@@ -69,6 +70,7 @@ class RoundResult {
     required this.exitPrice,
     required this.isCorrect,
     required this.pointsEarned,
+    required this.pointsLost,
     required this.timestamp,
   });
 
@@ -487,6 +489,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     final correct = (_prediction == Prediction.up  &&  priceWentUp) ||
                     (_prediction == Prediction.down && !priceWentUp);
     final earned  = correct ? 100 + (_streak * 20) : 0;
+    final losed   = !correct ? 100 : 0;
 
     HapticFeedback.lightImpact();
 
@@ -496,6 +499,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       exitPrice:    exitPrice,
       isCorrect:    correct,
       pointsEarned: earned,
+      pointsLost:   losed,
       timestamp:    DateTime.now(),
     );
 
@@ -509,6 +513,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         _bestStreak = max(_bestStreak, _streak);
         _totalScore += earned;
       } else {
+        _totalScore = max(0, _totalScore - losed);
         _streak = 0;
       }
       _history.insert(0, result);
