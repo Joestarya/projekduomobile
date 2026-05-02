@@ -214,6 +214,7 @@ async function refreshPriceCache() {
         { symbol: 'ETHUSDT', name: 'Ethereum', short: 'ETH' },
         { symbol: 'BNBUSDT', name: 'BNB',      short: 'BNB' },
         { symbol: 'SOLUSDT', name: 'Solana',   short: 'SOL' },
+        { symbol: 'USDTIDRT', name: 'Rupiah Token', short: 'USDT_IDR' },
     ];
 
     try {

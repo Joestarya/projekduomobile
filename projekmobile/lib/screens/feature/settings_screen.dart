@@ -1,9 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../user/login_screen.dart';
+import '../../service/biometric_auth_service.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _biometricEnabled = false;
+  bool _canUseBiometric = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final canUse = await BiometricAuthService.canAuthenticate();
+    setState(() {
+      _biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
+      _canUseBiometric = canUse;
+    });
+  }
+
+  Future<void> _toggleBiometric(bool value) async {
+    if (value) {
+      final isAuthenticated = await BiometricAuthService.authenticate(
+        reason: 'Verifikasi untuk mengaktifkan login biometrik',
+      );
+      if (!isAuthenticated) return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('biometric_enabled', value);
+    setState(() {
+      _biometricEnabled = value;
+    });
+  }
 
   Future<void> _logout(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
@@ -14,7 +53,7 @@ class SettingsScreen extends StatelessWidget {
 
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (context) => LoginScreen()),
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
       (route) => false,
     );
   }
@@ -63,7 +102,23 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   onTap: () {},
                 ),
-                const Divider(height: 1),
+                if (_canUseBiometric) ...[
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    secondary: const Icon(
+                      Icons.fingerprint,
+                      color: Color(0xFF638BFF),
+                    ),
+                    title: const Text('Login Biometrik'),
+                    subtitle: const Text(
+                      'Gunakan fingerprint / face ID',
+                      style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12),
+                    ),
+                    value: _biometricEnabled,
+                    onChanged: _toggleBiometric,
+                    activeColor: const Color(0xFF638BFF),
+                  ),
+                ],
               ],
             ),
           ),

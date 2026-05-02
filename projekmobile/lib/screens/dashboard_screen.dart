@@ -184,6 +184,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ── State ──────────────────────────────────
   bool _isPrivacyMode = false;
+  bool _isIdrMode = true;
   double _totalBalance = 0.0;
   Map<String, double> _userBalances = {};
   bool _isPortfolioConnected = false;
@@ -399,6 +400,11 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
+  double _getIdrRate() {
+    final idrAsset = _assets.where((a) => a.symbol == 'USDT_IDR').firstOrNull;
+    return idrAsset?.priceUsd ?? 17333.0;
+  }
+
   void _calculateTotalBalance() {
     double total = 0.0;
     for (var entry in _userBalances.entries) {
@@ -407,8 +413,8 @@ class _DashboardScreenState extends State<DashboardScreen>
 
       if (asset == 'USDT' || asset == 'USDC' || asset == 'FDUSD' || asset == 'BUSD') {
         total += amount;
-      } else if (asset == 'IDR' || asset == 'BIDR') {
-        total += amount; // Atas permintaan user, IDR tidak dikonversi
+      } else if (asset == 'IDR' || asset == 'BIDR' || asset == 'IDRT') {
+        total += amount / _getIdrRate();
       } else {
         final assetItem = _assets.where((a) => a.symbol == asset).firstOrNull;
         if (assetItem != null) {
@@ -582,6 +588,11 @@ class _DashboardScreenState extends State<DashboardScreen>
     } else {
       return '\$${value.toStringAsFixed(4)}';
     }
+  }
+
+  String _formatIdr(double value) {
+    final fixed = value.toStringAsFixed(0);
+    return 'Rp ${fixed.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.')}';
   }
 
   String _formatUpdatedTime(String isoTime) {
@@ -993,7 +1004,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ? '•••••••••'
                 : (!_isPortfolioConnected
                     ? 'Data tidak tersedia'
-                    : _formatUsd(_totalBalance)),
+                    : (_isIdrMode ? _formatIdr(_totalBalance * _getIdrRate()) : _formatUsd(_totalBalance))),
             style: TextStyle(
               color: !_isPortfolioConnected && !_isPrivacyMode ? Colors.white70 : Colors.white,
               fontSize: !_isPortfolioConnected && !_isPrivacyMode ? 22 : 32,
@@ -1003,79 +1014,73 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00C853).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: const Color(0xFF00C853).withOpacity(0.25),
-                  ),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.arrow_upward_rounded,
-                      color: Color(0xFF00E676),
-                      size: 11,
-                    ),
-                    SizedBox(width: 3),
-                    Text(
-                      '\$15.30  (+1.6%)',
-                      style: TextStyle(
-                        color: Color(0xFF00E676),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-             
-            ],
-          ),
+        
           const SizedBox(height: 12),
           // Quick Stats Row
           Row(
             children: [
-              _buildQuickStat(
-                'BTC',
-                _assets.where((a) => a.symbol == 'BTC').firstOrNull?.priceUsd,
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      ..._userBalances.entries
+                        .where((e) => e.value > 0)
+                        .map((e) {
+                          double valueIdr = 0.0;
+                          double valueUsd = 0.0;
+                          if (e.key == 'IDR' || e.key == 'BIDR' || e.key == 'IDRT') {
+                            valueIdr = e.value;
+                            valueUsd = e.value / _getIdrRate();
+                          } else if (e.key == 'USDT' || e.key == 'USDC' || e.key == 'BUSD' || e.key == 'FDUSD') {
+                            valueIdr = e.value * _getIdrRate();
+                            valueUsd = e.value;
+                          } else {
+                            final asset = _assets.where((a) => a.symbol == e.key).firstOrNull;
+                            final priceUsd = asset?.priceUsd ?? 0.0;
+                            valueIdr = e.value * priceUsd * _getIdrRate();
+                            valueUsd = e.value * priceUsd;
+                          }
+                          
+                          String displayStr;
+                          if (_isPrivacyMode) {
+                            displayStr = _isIdrMode ? 'Rp •••' : '\$ •••';
+                          } else {
+                            displayStr = _isIdrMode ? _formatIdr(valueIdr) : _formatUsd(valueUsd);
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: _buildQuickStat(e.key, displayStr),
+                          );
+                        }),
+                      if (_userBalances.isEmpty || !_userBalances.values.any((v) => v > 0))
+                         _buildQuickStat('Aset', 'Kosong'),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
-              _buildQuickStat(
-                'ETH',
-                _assets.where((a) => a.symbol == 'ETH').firstOrNull?.priceUsd,
-              ),
-              const Spacer(),
-              Flexible(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.vibration_rounded,
-                      color: Color(0xFF3A5070),
-                      size: 11,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.vibration_rounded,
+                    color: Color(0xFF3A5070),
+                    size: 11,
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    'Goyangkan untuk\nmembunyikan',
+                    maxLines: 2,
+                    textAlign: TextAlign.right,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: const Color.fromARGB(255, 252, 253, 255).withOpacity(0.9),
+                      fontSize: 9,
+                      fontStyle: FontStyle.italic,
                     ),
-                    const SizedBox(width: 3),
-                    Flexible(
-                      child: Text(
-                        'Goyangkan untuk sembunyikan',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: const Color(0xFF3A5070).withOpacity(0.9),
-                          fontSize: 10,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1084,7 +1089,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildQuickStat(String symbol, double? price) {
+  Widget _buildQuickStat(String symbol, String displayValue) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -1105,7 +1110,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           const SizedBox(width: 5),
           Text(
-            price != null ? _formatUsd(price) : '-',
+            displayValue,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 11,
@@ -1136,7 +1141,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       IconButton(
         icon: const Icon(Icons.currency_exchange, color: Colors.white70),
         onPressed: () {
-          // TODO: Navigasi ke Konverter Mata Uang
+          setState(() {
+            _isIdrMode = !_isIdrMode;
+          });
         },
       ),
     ],
@@ -1193,9 +1200,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       );
     }
 
+    final displayAssets = _assets.where((a) => a.symbol != 'USDT_IDR').toList();
     return ListView.builder(
       padding: const EdgeInsets.only(top: 4, bottom: 16),
-      itemCount: _assets.length,
+      itemCount: displayAssets.length,
       itemBuilder: (context, index) {
         // Staggered animation per item
         return AnimatedBuilder(
@@ -1212,7 +1220,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: Opacity(opacity: animValue, child: child),
             );
           },
-          child: _buildAssetTile(_assets[index]),
+          child: _buildAssetTile(displayAssets[index]),
         );
       },
     );
