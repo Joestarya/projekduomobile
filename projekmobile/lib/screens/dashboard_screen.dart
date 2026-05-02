@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:sensors_plus/sensors_plus.dart';
 import '../service/api_config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 // ─────────────────────────────────────────────
 // MODEL
 // ─────────────────────────────────────────────
@@ -183,7 +184,9 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ── State ──────────────────────────────────
   bool _isPrivacyMode = false;
-  double _totalBalance = 950.0;
+  double _totalBalance = 0.0;
+  Map<String, double> _userBalances = {};
+  bool _isPortfolioConnected = false;
   bool _isLoadingPrices = true;
   bool _isFetchingPrices = false;
   bool _hasPendingPriceFetch = false;
@@ -234,12 +237,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     _startShakeDetection();
     _requestPriceFetch(showLoader: true);
     _fetchAllSparklines();
+    _fetchPortfolio();
 
     _priceRefreshTimer = Timer.periodic(_priceRefreshInterval, (_) {
       _requestPriceFetch(showLoader: false);
     });
     _chartRefreshTimer = Timer.periodic(_chartRefreshInterval, (_) {
       _fetchAllSparklines();
+      _fetchPortfolio();
     });
 
     // Animasi masuk
@@ -348,6 +353,76 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ─────────────────────────────────────────────
+  // PORTFOLIO FETCH
+  // ─────────────────────────────────────────────
+  Future<void> _fetchPortfolio() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      if (userId == null || userId.isEmpty) return;
+
+      final url = ApiConfig.endpoint('/crypto/portfolio?user_id=$userId');
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final balancesList = data['balances'] as List;
+
+        final Map<String, double> newBalances = {};
+        for (var b in balancesList) {
+          final asset = b['asset'];
+          final free = double.tryParse(b['free'].toString()) ?? 0.0;
+          final locked = double.tryParse(b['locked'].toString()) ?? 0.0;
+          newBalances[asset] = free + locked;
+        }
+
+        if (mounted) {
+          setState(() {
+            _isPortfolioConnected = true;
+            _userBalances = newBalances;
+            _calculateTotalBalance();
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isPortfolioConnected = false;
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isPortfolioConnected = false;
+        });
+      }
+    }
+  }
+
+  void _calculateTotalBalance() {
+    double total = 0.0;
+    for (var entry in _userBalances.entries) {
+      final asset = entry.key;
+      final amount = entry.value;
+
+      if (asset == 'USDT' || asset == 'USDC' || asset == 'FDUSD' || asset == 'BUSD') {
+        total += amount;
+      } else if (asset == 'IDR' || asset == 'BIDR') {
+        total += amount; // Atas permintaan user, IDR tidak dikonversi
+      } else {
+        final assetItem = _assets.where((a) => a.symbol == asset).firstOrNull;
+        if (assetItem != null) {
+          total += amount * assetItem.priceUsd;
+        }
+      }
+    }
+
+    if (_userBalances.isNotEmpty) {
+      _totalBalance = total;
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // PRICE FETCH
   // ─────────────────────────────────────────────
   void _requestPriceFetch({required bool showLoader}) {
@@ -422,6 +497,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         _lastUpdatedAt = updatedAt;
         _priceError = null;
         _isLoadingPrices = false;
+        _calculateTotalBalance();
       });
     } on TimeoutException {
       if (!mounted) return;
@@ -913,10 +989,14 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           const SizedBox(height: 10),
           Text(
-            _isPrivacyMode ? '•••••••••' : _formatUsd(_totalBalance),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 32,
+            _isPrivacyMode
+                ? '•••••••••'
+                : (!_isPortfolioConnected
+                    ? 'Data tidak tersedia'
+                    : _formatUsd(_totalBalance)),
+            style: TextStyle(
+              color: !_isPortfolioConnected && !_isPrivacyMode ? Colors.white70 : Colors.white,
+              fontSize: !_isPortfolioConnected && !_isPrivacyMode ? 22 : 32,
               fontWeight: FontWeight.w800,
               letterSpacing: -1,
               height: 1,
@@ -1157,8 +1237,27 @@ class _DashboardScreenState extends State<DashboardScreen>
     final sparkData = _sparklineCache[asset.pair];
     final hasChart = sparkData != null && sparkData.length > 2;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
+    final userBalance = _userBalances[asset.symbol] ?? 0.0;
+
+    return InkWell(
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          isScrollControlled: true,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          builder: (_) => Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: _OrderBottomSheet(asset: asset, userBalance: userBalance),
+          ),
+        );
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
       decoration: BoxDecoration(
         color: flashColor != null
             ? flashColor.withOpacity(0.04)
@@ -1212,10 +1311,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    asset.name,
-                    style: const TextStyle(
-                      color: Color(0xFF4A6080),
+                    userBalance > 0
+                        ? '${userBalance.toStringAsFixed(userBalance < 1 ? 4 : 2)} ${asset.symbol}'
+                        : asset.name,
+                    style: TextStyle(
+                      color: userBalance > 0 ? const Color(0xFF6C63FF) : const Color(0xFF4A6080),
                       fontSize: 12,
+                      fontWeight: userBalance > 0 ? FontWeight.w600 : FontWeight.normal,
                       overflow: TextOverflow.ellipsis,
                     ),
                     maxLines: 1,
@@ -1313,7 +1415,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ],
               ),
             ),
+
+            const SizedBox(width: 8),
+            // ── Trade Icon ──
+            Icon(
+              Icons.swap_horiz_rounded,
+              color: Colors.white.withOpacity(0.5),
+              size: 20,
+            ),
           ],
+        ),
         ),
       ),
     );
@@ -1350,5 +1461,272 @@ class _DashboardScreenState extends State<DashboardScreen>
       default:
         return [const Color(0xFF6C63FF), const Color(0xFF3BC8E7)];
     }
+  }
+}
+
+// ─────────────────────────────────────────────
+// ORDER BOTTOM SHEET
+// ─────────────────────────────────────────────
+class _OrderBottomSheet extends StatefulWidget {
+  final _AssetItem asset;
+  final double userBalance;
+
+  const _OrderBottomSheet({required this.asset, required this.userBalance});
+
+  @override
+  State<_OrderBottomSheet> createState() => _OrderBottomSheetState();
+}
+
+class _OrderBottomSheetState extends State<_OrderBottomSheet> {
+  bool isBuy = true;
+  final TextEditingController _amountController = TextEditingController();
+  bool _isSubmitting = false;
+  String? _errorMessage;
+  String? _successMessage;
+
+  Future<void> _submitOrder() async {
+    final amountText = _amountController.text.replaceAll(',', '.');
+    final amount = double.tryParse(amountText) ?? 0.0;
+    if (amount <= 0) return;
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+      _successMessage = null;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+
+      final body = {
+        'user_id': userId,
+        'symbol': widget.asset.pair,
+        'side': isBuy ? 'BUY' : 'SELL',
+        'type': 'MARKET',
+      };
+
+      if (isBuy) {
+        body['quoteOrderQty'] = amount.toString();
+      } else {
+        body['quantity'] = amount.toString();
+      }
+
+      final response = await http.post(
+        Uri.parse(ApiConfig.endpoint('/crypto/order')),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      final respData = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        if (!mounted) return;
+        setState(() {
+          _successMessage = 'Transaksi berhasil dikonfirmasi!';
+        });
+        
+        // Tutup bottom sheet setelah sukses
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) Navigator.pop(context);
+        });
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _errorMessage = respData['detail'] ?? respData['message'] ?? 'Terjadi kesalahan tidak dikenal.';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Error Jaringan. Pastikan Anda terkoneksi ke Internet dan tidak diblokir ISP.';
+      });
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Trading ${widget.asset.symbol}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                'Saldo: ${widget.userBalance.toStringAsFixed(4)} ${widget.asset.symbol}',
+                style: const TextStyle(
+                  color: Color(0xFF8B9BB4),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => isBuy = true),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isBuy ? const Color(0xFF00E676) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isBuy ? Colors.transparent : const Color(0xFF3A5070),
+                      ),
+                    ),
+                    child: Text(
+                      'BUY',
+                      style: TextStyle(
+                        color: isBuy ? Colors.black : Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => isBuy = false),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: !isBuy ? const Color(0xFFFF5252) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: !isBuy ? Colors.transparent : const Color(0xFF3A5070),
+                      ),
+                    ),
+                    child: Text(
+                      'SELL',
+                      style: TextStyle(
+                        color: !isBuy ? Colors.white : Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: const TextStyle(color: Colors.white, fontSize: 16),
+            decoration: InputDecoration(
+              labelText: isBuy ? 'Jumlah USDT' : 'Jumlah ${widget.asset.symbol}',
+              labelStyle: const TextStyle(color: Color(0xFF8B9BB4)),
+              filled: true,
+              fillColor: const Color(0xFF131929),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              suffixText: isBuy ? 'USDT' : widget.asset.symbol,
+              suffixStyle: const TextStyle(color: Colors.white),
+            ),
+          ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF5252).withOpacity(0.15),
+                border: Border.all(color: const Color(0xFFFF5252).withOpacity(0.5)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Color(0xFFFF5252), size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Color(0xFFFF5252), fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          
+          if (_successMessage != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00E676).withOpacity(0.15),
+                border: Border.all(color: const Color(0xFF00E676).withOpacity(0.5)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_outline, color: Color(0xFF00E676), size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _successMessage!,
+                      style: const TextStyle(color: Color(0xFF00E676), fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isSubmitting ? null : _submitOrder,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isBuy ? const Color(0xFF00E676) : const Color(0xFFFF5252),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : Text(
+                      isBuy ? 'Beli Sekarang' : 'Jual Sekarang',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ),
+    );
   }
 }
