@@ -198,7 +198,7 @@ class _AiPredictionCardState extends State<AiPredictionCard>
         // ── Disclaimer kecil ──────────────────
         const Text(
           '⚠️  Prediksi AI bukan saran investasi.',
-          style: TextStyle(color: Color(0xFF1A2535), fontSize: 10),
+          style: TextStyle(color: Color.fromARGB(255, 255, 255, 255), fontSize: 10),
         ),
         const SizedBox(height: 18),
       ],
