@@ -68,8 +68,9 @@ class AiPrediction {
 // ─────────────────────────────────────────────
 class AiPredictionCard extends StatefulWidget {
   final String selectedPair;
+  final String timeframe;
 
-  const AiPredictionCard({super.key, required this.selectedPair});
+  const AiPredictionCard({super.key, required this.selectedPair, required this.timeframe});
 
   @override
   State<AiPredictionCard> createState() => _AiPredictionCardState();
@@ -97,8 +98,8 @@ class _AiPredictionCardState extends State<AiPredictionCard>
   @override
   void didUpdateWidget(AiPredictionCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Reset kalau pair ganti
-    if (oldWidget.selectedPair != widget.selectedPair) {
+    // Reset kalau pair atau timeframe ganti
+    if (oldWidget.selectedPair != widget.selectedPair || oldWidget.timeframe != widget.timeframe) {
       setState(() {
         _prediction = null;
         _errorMsg = null;
@@ -127,7 +128,7 @@ class _AiPredictionCardState extends State<AiPredictionCard>
           .post(
             Uri.parse(ApiConfig.endpoint('/crypto/predict')),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'pair': widget.selectedPair}),
+            body: jsonEncode({'pair': widget.selectedPair, 'timeframe': widget.timeframe}),
           )
           .timeout(const Duration(seconds: 15));
 

@@ -13,7 +13,6 @@ const db = require('./db');
 // --- TAMBAHAN UNTUK GEMINI ---
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Gunakan fallback empty string agar tidak crash jika .env belum terbaca
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : '';
 
 console.log("Key Terbaca:", GEMINI_API_KEY ? "Ya" : "Tidak");
@@ -22,7 +21,6 @@ if (GEMINI_API_KEY) {
     console.log("Karakter Pertama:", GEMINI_API_KEY[0]);
 }
 
-// Inisialisasi SDK Gemini (Pengganti URL manual yang rawan error)
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 // -----------------------------
 
@@ -52,88 +50,65 @@ if (!SECRET_KEY) {
     throw new Error('JWT_SECRET belum diset. Tambahkan di file .env backend.');
 }
 
-/**
- * SECURE KEY DERIVATION menggunakan PBKDF2
- * 
- * Strategi Keamanan:
- * 1. Salt derivation: bcrypt_hash + user_id + username
- * 2. Key Derivation: PBKDF2 dengan 100,000 iterations
- * 3. Hash: SHA-256
- * 
- * Hasilnya: Setiap user punya key yang UNIQUE dan SLOW to brute-force
- * 
- * @param {string} hashedPassword - Bcrypt hashed password dari database
- * @param {number} userId - ID user
- * @param {string} username - Username user
- * @returns {Buffer} Encryption key 32-byte yang aman
- */
+// ==========================================
+// MIDDLEWARE: JWT AUTH
+// ── Dipakai oleh endpoint /game/score ─────
+// ==========================================
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // "Bearer <token>"
+
+    if (!token) {
+        return res.status(401).json({ message: 'Token tidak ditemukan' });
+    }
+
+    jwt.verify(token, SECRET_KEY, (err, user) => {
+        if (err) {
+            return res.status(403).json({ message: 'Token tidak valid atau kadaluarsa' });
+        }
+        req.user = user; // { id, username, iat, exp }
+        next();
+    });
+}
+
+// ==========================================
+// SECURE KEY DERIVATION (PBKDF2)
+// ==========================================
 function deriveEncryptionKey(hashedPassword, userId, username) {
-    // Buat salt yang unik per user dari: bcrypt_hash + user_id + username
-    // Ini memastikan setiap user punya salt yang berbeda
     const saltInput = `${hashedPassword}|${userId}|${username}`;
     const salt = crypto.createHash('sha256').update(saltInput).digest();
-    
-    // PBKDF2: Key derivation function yang SLOW dan SECURE
-    // - Iterations: 100,000 (NIST recommended minimum)
-    // - Digest: SHA-256
-    // - Key length: 32 bytes (untuk AES-256)
     const key = crypto.pbkdf2Sync(
-        hashedPassword,  // Password untuk derivation
-        salt,            // Salt unik per user
-        100000,          // Iterations (semakin tinggi = semakin aman tapi lambat)
-        32,              // Key length (32 bytes untuk AES-256)
-        'sha256'         // Digest algorithm
+        hashedPassword,
+        salt,
+        100000,
+        32,
+        'sha256'
     );
-    
     return key;
 }
 
-/**
- * Enkripsi data dengan AES-256-GCM menggunakan password user
- * @param {string} plaintext - Data yang akan dienkripsi
- * @param {string} hashedPassword - Bcrypt hashed password dari database
- * @param {number} userId - ID user
- * @param {string} username - Username user
- * @returns {string} Format: iv:authTag:encrypted (hex encoded)
- */
 function encryptQRData(plaintext, hashedPassword, userId, username) {
     const encryptionKey = deriveEncryptionKey(hashedPassword, userId, username);
-    const iv = crypto.randomBytes(16); // 16-byte IV untuk GCM
+    const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
-    
     let encrypted = cipher.update(plaintext, 'utf8', 'hex');
     encrypted += cipher.final('hex');
-    
     const authTag = cipher.getAuthTag();
-    
-    // Format: iv:authTag:encrypted (semua hex encoded)
     return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
 }
 
-/**
- * Dekripsi data dengan AES-256-GCM menggunakan password user
- * @param {string} ciphertext - Format: iv:authTag:encrypted
- * @param {string} hashedPassword - Bcrypt hashed password dari database
- * @param {number} userId - ID user
- * @param {string} username - Username user
- * @returns {string} Data yang sudah didekripsi
- */
 function decryptQRData(ciphertext, hashedPassword, userId, username) {
     try {
         const encryptionKey = deriveEncryptionKey(hashedPassword, userId, username);
         const parts = ciphertext.split(':');
         if (parts.length !== 3) throw new Error('Format cipher tidak valid');
-        
         const iv = Buffer.from(parts[0], 'hex');
         const authTag = Buffer.from(parts[1], 'hex');
         const encrypted = parts[2];
-        
         const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey, iv);
         decipher.setAuthTag(authTag);
-        
         let decrypted = decipher.update(encrypted, 'hex', 'utf8');
         decrypted += decipher.final('utf8');
-        
         return decrypted;
     } catch (err) {
         console.error('[Decrypt] Error:', err.message);
@@ -150,11 +125,9 @@ let priceCache = {
     isFetching: false,
 };
 
-// Cache sparkline/kline per symbol: { BTCUSDT: [prices...], ... }
 let klineCache = {};
 let klineCacheUpdatedAt = {};
-const KLINE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit
-
+const KLINE_CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_TTL_MS = 1500;
 
 // ==========================================
@@ -177,13 +150,10 @@ async function fetchBinance(path) {
     throw new Error(`Semua endpoint Binance gagal. ${lastError || ''}`.trim());
 }
 
-// ==========================================
-// HELPER: Fetch dengan Auth (Signature) Binance
-// ==========================================
 async function fetchBinanceAuth(path, apiKey, secretKey, method = 'GET') {
     const timestamp = Date.now();
     let queryString = `timestamp=${timestamp}`;
-    
+
     if (path.includes('?')) {
         const parts = path.split('?');
         path = parts[0];
@@ -193,7 +163,7 @@ async function fetchBinanceAuth(path, apiKey, secretKey, method = 'GET') {
     const signature = crypto.createHmac('sha256', secretKey).update(queryString).digest('hex');
     const finalQueryString = `${queryString}&signature=${signature}`;
     const fullPath = `${path}?${finalQueryString}`;
-        
+
     let lastError = null;
     for (const baseUrl of BINANCE_BASE_URLS) {
         try {
@@ -201,10 +171,8 @@ async function fetchBinanceAuth(path, apiKey, secretKey, method = 'GET') {
             const timeout = setTimeout(() => controller.abort(), 5000);
             const response = await fetch(`${baseUrl}${fullPath}`, {
                 method: method,
-                headers: {
-                    'X-MBX-APIKEY': apiKey
-                },
-                signal: controller.signal
+                headers: { 'X-MBX-APIKEY': apiKey },
+                signal: controller.signal,
             });
             clearTimeout(timeout);
             if (!response.ok) {
@@ -218,19 +186,16 @@ async function fetchBinanceAuth(path, apiKey, secretKey, method = 'GET') {
         }
     }
 
-    // FALLBACK MOCK DATA
-    // Karena API Binance diblokir oleh ISP (Internet Positif/Aduan Konten) di Indonesia,
-    // kita kembalikan data mock portofolio agar UI tetap bisa didemonstrasikan.
     if (path.includes('/account')) {
         console.warn(`[fetchBinanceAuth] Semua endpoint gagal karena blokir ISP. Menggunakan data MOCK.`);
         return {
             balances: [
-                { asset: 'BTC', free: '0.015', locked: '0' },
-                { asset: 'ETH', free: '1.25', locked: '0' },
-                { asset: 'BNB', free: '10.5', locked: '0' },
-                { asset: 'SOL', free: '25.0', locked: '0' },
-                { asset: 'USDT', free: '150.0', locked: '0' }
-            ]
+                { asset: 'BTC',  free: '0.015', locked: '0' },
+                { asset: 'ETH',  free: '1.25',  locked: '0' },
+                { asset: 'BNB',  free: '10.5',  locked: '0' },
+                { asset: 'SOL',  free: '25.0',  locked: '0' },
+                { asset: 'USDT', free: '150.0', locked: '0' },
+            ],
         };
     }
 
@@ -245,14 +210,13 @@ async function refreshPriceCache() {
     priceCache.isFetching = true;
 
     const ASSETS = [
-        { symbol: 'BTCUSDT', name: 'Bitcoin', short: 'BTC' },
+        { symbol: 'BTCUSDT', name: 'Bitcoin',  short: 'BTC' },
         { symbol: 'ETHUSDT', name: 'Ethereum', short: 'ETH' },
-        { symbol: 'BNBUSDT', name: 'BNB', short: 'BNB' },
-        { symbol: 'SOLUSDT', name: 'Solana', short: 'SOL' },
+        { symbol: 'BNBUSDT', name: 'BNB',      short: 'BNB' },
+        { symbol: 'SOLUSDT', name: 'Solana',   short: 'SOL' },
     ];
 
     try {
-        // Fetch harga sekarang + 24hr stats sekaligus
         const [tickerData] = await Promise.all([
             fetchBinance(`/ticker/24hr?symbols=${JSON.stringify(ASSETS.map((a) => a.symbol))}`),
         ]);
@@ -285,13 +249,12 @@ async function refreshPriceCache() {
 }
 
 // ==========================================
-// KLINE/SPARKLINE CACHE
+// KLINE CACHE
 // ==========================================
 async function refreshKlineCache(symbol, interval = '1h', limit = 24) {
     const cacheKey = `${symbol}_${interval}_${limit}`;
     const now = Date.now();
 
-    // Cek apakah perlu refresh
     if (
         klineCache[cacheKey] &&
         klineCacheUpdatedAt[cacheKey] &&
@@ -307,19 +270,17 @@ async function refreshKlineCache(symbol, interval = '1h', limit = 24) {
 
         if (!Array.isArray(data)) throw new Error('Format kline tidak valid');
 
-        // Binance kline format: [openTime, open, high, low, close, volume, ...]
         const klines = data.map((k) => ({
             openTime: k[0],
-            open: parseFloat(k[1]),
-            high: parseFloat(k[2]),
-            low: parseFloat(k[3]),
-            close: parseFloat(k[4]),
-            volume: parseFloat(k[5]),
+            open:     parseFloat(k[1]),
+            high:     parseFloat(k[2]),
+            low:      parseFloat(k[3]),
+            close:    parseFloat(k[4]),
+            volume:   parseFloat(k[5]),
         }));
 
         klineCache[cacheKey] = klines;
         klineCacheUpdatedAt[cacheKey] = now;
-
         return klines;
     } catch (err) {
         console.error(`[KlineCache] Gagal refresh ${symbol}:`, err.message);
@@ -335,21 +296,18 @@ async function warmUpKlineCache() {
     }
 }
 
-// Jalankan saat server start
 refreshPriceCache();
 setInterval(refreshPriceCache, CACHE_TTL_MS);
 warmUpKlineCache();
 
-// Refresh kline cache setiap 5 menit
 setInterval(() => {
     const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT'];
     symbols.forEach((sym) => refreshKlineCache(sym).catch(() => {}));
 }, KLINE_CACHE_TTL_MS);
 
 // ==========================================
-// 1. ENDPOINT REGISTER
+// QR SCAN & DATA
 // ==========================================
-
 db.query("ALTER TABLE users ADD COLUMN qr_data TEXT DEFAULT NULL", (err) => {
     if (err && err.code !== 'ER_DUP_FIELDNAME') {
         console.error("Gagal menambah kolom qr_data:", err);
@@ -358,19 +316,17 @@ db.query("ALTER TABLE users ADD COLUMN qr_data TEXT DEFAULT NULL", (err) => {
 
 app.post('/qr-scan', (req, res) => {
     const { user_id, username, full_name, qr_data } = req.body;
-        
+
     if ((!user_id || String(user_id).trim() === '') && (!username || username.trim() === '') && (!full_name || full_name.trim() === '')) {
         return res.status(400).json({ message: 'Identitas user tidak boleh kosong' });
     }
     if (!qr_data || qr_data.trim() === '') {
         return res.status(400).json({ message: 'Data QR tidak boleh kosong' });
     }
-    
-    // Tentukan query untuk mencari user
+
     const parsedId = user_id ? parseInt(String(user_id), 10) : NaN;
-    let selectQuery;
-    let selectParams;
-    
+    let selectQuery, selectParams;
+
     if (!isNaN(parsedId) && parsedId > 0) {
         selectQuery = 'SELECT id, username, password FROM users WHERE id = ?';
         selectParams = [parsedId];
@@ -378,116 +334,76 @@ app.post('/qr-scan', (req, res) => {
         selectQuery = 'SELECT id, username, password FROM users WHERE username = ? OR full_name = ?';
         selectParams = [username || full_name, full_name || username];
     }
-    
-    // Step 1: Query user untuk mendapatkan password dan username
+
     db.query(selectQuery, selectParams, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (results.length === 0) {
-            return res.status(404).json({ message: 'User tidak ditemukan' });
-        }
-        
+        if (err) return res.status(500).json({ error: err.message });
+        if (results.length === 0) return res.status(404).json({ message: 'User tidak ditemukan' });
+
         const user = results[0];
-        
-        // Step 2: Enkripsi QR data menggunakan PBKDF2 dengan password + userId + username
         let encryptedQRData;
         try {
             encryptedQRData = encryptQRData(qr_data, user.password, user.id, user.username);
         } catch (err) {
             return res.status(500).json({ error: 'Gagal enkripsi QR data', detail: err.message });
         }
-        
-        // Step 3: Update QR data
-        const updateQuery = 'UPDATE users SET qr_data = ? WHERE id = ?';
-        const updateParams = [encryptedQRData, user.id];
-        
-        db.query(updateQuery, updateParams, (err, results) => {
-            if (err) {
-                return res.status(500).json({ error: err.message });
-            }
-            res.status(200).json({ 
+
+        db.query('UPDATE users SET qr_data = ? WHERE id = ?', [encryptedQRData, user.id], (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.status(200).json({
                 message: 'Data QR berhasil disimpan (encrypted dengan PBKDF2)',
-                user_id: user.id
+                user_id: user.id,
             });
         });
     });
 });
 
-// ==========================================
-// GET QR DATA (dengan dekripsi)
-// ==========================================
-/**
- * GET /qr-data?user_id=1 atau ?username=john
- * Return: { qr_data: "decrypted data", user_id: 1, ... }
- * 
- * Dekripsi menggunakan password user yang sudah di-hash
- */
 app.get('/qr-data', (req, res) => {
     const { user_id, username } = req.query;
-    
+
     if ((!user_id || String(user_id).trim() === '') && (!username || username.trim() === '')) {
         return res.status(400).json({ message: 'user_id atau username harus dikirimkan' });
     }
-    
-    let query;
-    let params;
-    
+
+    let query, params;
     if (user_id) {
         const parsedId = parseInt(String(user_id), 10);
-        if (isNaN(parsedId)) {
-            return res.status(400).json({ message: 'user_id harus berupa angka' });
-        }
+        if (isNaN(parsedId)) return res.status(400).json({ message: 'user_id harus berupa angka' });
         query = 'SELECT id, username, full_name, qr_data, password FROM users WHERE id = ?';
         params = [parsedId];
     } else {
         query = 'SELECT id, username, full_name, qr_data, password FROM users WHERE username = ?';
         params = [username];
     }
-    
+
     db.query(query, params, (err, results) => {
-        if (err) {
-            return res.status(500).json({ error: err.message });
-        }
-        if (results.length === 0) {
-            return res.status(404).json({ message: 'User tidak ditemukan' });
-        }
-        
+        if (err) return res.status(500).json({ error: err.message });
+        if (results.length === 0) return res.status(404).json({ message: 'User tidak ditemukan' });
+
         const user = results[0];
         let decryptedQRData = null;
-        
         if (user.qr_data) {
             try {
-                // Dekripsi menggunakan PBKDF2 dengan password + userId + username
                 decryptedQRData = decryptQRData(user.qr_data, user.password, user.id, user.username);
             } catch (err) {
-                console.error('[GetQRData] Decrypt error:', err.message);
                 return res.status(500).json({ error: 'Gagal dekripsi QR data', detail: err.message });
             }
         }
-        
-        res.json({
-            id: user.id,
-            username: user.username,
-            full_name: user.full_name,
-            qr_data: decryptedQRData,
-        });
+
+        res.json({ id: user.id, username: user.username, full_name: user.full_name, qr_data: decryptedQRData });
     });
 });
 
 // ==========================================
-// PORTFOLIO BINANCE API (menggunakan QR Data)
+// PORTFOLIO & ORDER BINANCE
 // ==========================================
 app.get('/crypto/portfolio', (req, res) => {
     const { user_id, username } = req.query;
-    
+
     if ((!user_id || String(user_id).trim() === '') && (!username || username.trim() === '')) {
         return res.status(400).json({ message: 'user_id atau username harus dikirimkan' });
     }
-    
-    let query;
-    let params;
-    
+
+    let query, params;
     if (user_id) {
         query = 'SELECT id, username, full_name, qr_data, password FROM users WHERE id = ?';
         params = [parseInt(String(user_id), 10)];
@@ -495,37 +411,30 @@ app.get('/crypto/portfolio', (req, res) => {
         query = 'SELECT id, username, full_name, qr_data, password FROM users WHERE username = ?';
         params = [username];
     }
-    
+
     db.query(query, params, async (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         if (results.length === 0) return res.status(404).json({ message: 'User tidak ditemukan' });
-        
+
         const user = results[0];
-        if (!user.qr_data) {
-            return res.status(400).json({ message: 'User belum melakukan scan QR Binance' });
-        }
-        
+        if (!user.qr_data) return res.status(400).json({ message: 'User belum melakukan scan QR Binance' });
+
         let apiKey, secretKey;
         try {
             const decryptedQRData = decryptQRData(user.qr_data, user.password, user.id, user.username);
             const keyData = JSON.parse(decryptedQRData);
-            apiKey = keyData.apiKey || keyData.api_key || keyData.apikey;
-            secretKey = keyData.secretKey || keyData.secret_key || keyData.secretkey;
-            
-            if (apiKey) apiKey = String(apiKey).trim();
-            if (secretKey) secretKey = String(secretKey).trim();
-
-            if (!apiKey || !secretKey) {
-                 throw new Error('Format QR tidak mengandung apiKey dan secretKey');
-            }
+            apiKey    = String(keyData.apiKey    || keyData.api_key    || keyData.apikey    || '').trim();
+            secretKey = String(keyData.secretKey || keyData.secret_key || keyData.secretkey || '').trim();
+            if (!apiKey || !secretKey) throw new Error('Format QR tidak mengandung apiKey dan secretKey');
         } catch (err) {
             return res.status(400).json({ error: 'Gagal membaca API key dari data QR', detail: err.message });
         }
-        
+
         try {
             const accountData = await fetchBinanceAuth('/account', apiKey, secretKey);
-            // Filter non-zero balances
-            const balances = accountData.balances.filter(b => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0);
+            const balances = accountData.balances.filter(
+                (b) => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0
+            );
             res.json({ balances });
         } catch (err) {
             res.status(500).json({ error: 'Gagal mengambil data portofolio dari Binance', detail: err.message });
@@ -533,25 +442,16 @@ app.get('/crypto/portfolio', (req, res) => {
     });
 });
 
-// ==========================================
-// ORDER BINANCE API (REAL TRADING)
-// ==========================================
 app.post('/crypto/order', (req, res) => {
     const { user_id, username, symbol, side, type, quantity, quoteOrderQty } = req.body;
-    
+
     if ((!user_id || String(user_id).trim() === '') && (!username || username.trim() === '')) {
         return res.status(400).json({ message: 'user_id atau username harus dikirimkan' });
     }
-    if (!symbol || !side || !type) {
-        return res.status(400).json({ message: 'symbol, side, dan type wajib diisi' });
-    }
-    if (!quantity && !quoteOrderQty) {
-        return res.status(400).json({ message: 'quantity atau quoteOrderQty wajib diisi' });
-    }
-    
-    let query;
-    let params;
-    
+    if (!symbol || !side || !type) return res.status(400).json({ message: 'symbol, side, dan type wajib diisi' });
+    if (!quantity && !quoteOrderQty) return res.status(400).json({ message: 'quantity atau quoteOrderQty wajib diisi' });
+
+    let query, params;
     if (user_id) {
         query = 'SELECT id, username, full_name, qr_data, password FROM users WHERE id = ?';
         params = [parseInt(String(user_id), 10)];
@@ -559,33 +459,25 @@ app.post('/crypto/order', (req, res) => {
         query = 'SELECT id, username, full_name, qr_data, password FROM users WHERE username = ?';
         params = [username];
     }
-    
+
     db.query(query, params, async (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
         if (results.length === 0) return res.status(404).json({ message: 'User tidak ditemukan' });
-        
+
         const user = results[0];
-        if (!user.qr_data) {
-            return res.status(400).json({ message: 'User belum melakukan scan QR Binance' });
-        }
-        
+        if (!user.qr_data) return res.status(400).json({ message: 'User belum melakukan scan QR Binance' });
+
         let apiKey, secretKey;
         try {
             const decryptedQRData = decryptQRData(user.qr_data, user.password, user.id, user.username);
             const keyData = JSON.parse(decryptedQRData);
-            apiKey = keyData.apiKey || keyData.api_key || keyData.apikey;
-            secretKey = keyData.secretKey || keyData.secret_key || keyData.secretkey;
-            
-            if (apiKey) apiKey = String(apiKey).trim();
-            if (secretKey) secretKey = String(secretKey).trim();
-
-            if (!apiKey || !secretKey) {
-                 throw new Error('Format QR tidak mengandung apiKey dan secretKey');
-            }
+            apiKey    = String(keyData.apiKey    || keyData.api_key    || keyData.apikey    || '').trim();
+            secretKey = String(keyData.secretKey || keyData.secret_key || keyData.secretkey || '').trim();
+            if (!apiKey || !secretKey) throw new Error('Format QR tidak mengandung apiKey dan secretKey');
         } catch (err) {
             return res.status(400).json({ error: 'Gagal membaca API key dari data QR', detail: err.message });
         }
-        
+
         try {
             let orderPath = `/order?symbol=${symbol.toUpperCase()}&side=${side.toUpperCase()}&type=${type.toUpperCase()}`;
             if (quantity) orderPath += `&quantity=${quantity}`;
@@ -594,80 +486,55 @@ app.post('/crypto/order', (req, res) => {
             const orderResponse = await fetchBinanceAuth(orderPath, apiKey, secretKey, 'POST');
             res.json({ message: 'Order berhasil dieksekusi', data: orderResponse });
         } catch (err) {
-            let userFriendlyMsg = err.message;
-            if (err.message.includes('NOTIONAL')) {
-                userFriendlyMsg = 'Minimum order 5 USDT';
-            } else if (err.message.includes('Account has insufficient balance')) {
-                userFriendlyMsg = 'Saldo Anda tidak mencukupi';
-            } else if (err.message.includes('LOT_SIZE')) {
-                userFriendlyMsg = 'Jumlah koin tidak sesuai';
-            } else if (err.message.includes('Invalid API-key, IP, or permissions')) {
-                userFriendlyMsg = 'API Key salah, kadaluarsa, atau tidak memiliki izin Spot Trading.';
-            }
-            
-            res.status(400).json({ 
-                error: 'Gagal mengeksekusi order di Binance', 
-                detail: userFriendlyMsg,
-                original: err.message
-            });
+            let msg = err.message;
+            if (msg.includes('NOTIONAL'))                                msg = 'Minimum order 5 USDT';
+            else if (msg.includes('Account has insufficient balance'))   msg = 'Saldo Anda tidak mencukupi';
+            else if (msg.includes('LOT_SIZE'))                           msg = 'Jumlah koin tidak sesuai';
+            else if (msg.includes('Invalid API-key, IP, or permissions'))msg = 'API Key salah, kadaluarsa, atau tidak memiliki izin Spot Trading.';
+
+            res.status(400).json({ error: 'Gagal mengeksekusi order di Binance', detail: msg, original: err.message });
         }
     });
 });
 
 // ==========================================
-// 1.5. ENDPOINT REGISTER
+// REGISTER & LOGIN
 // ==========================================
 app.post('/register', (req, res) => {
     const { full_name, username, password } = req.body;
-
     if (!full_name || !username || !password) {
         return res.status(400).json({ message: 'Semua field (Nama, Email, Password) harus diisi!' });
     }
 
-    // Cek apakah username sudah ada
-    const checkQuery = 'SELECT id FROM users WHERE username = ?';
-    db.query(checkQuery, [username], async (err, results) => {
+    db.query('SELECT id FROM users WHERE username = ?', [username], async (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
-
-        if (results.length > 0) {
-            return res.status(400).json({ message: 'Email/Username sudah digunakan!' });
-        }
+        if (results.length > 0) return res.status(400).json({ message: 'Email/Username sudah digunakan!' });
 
         try {
-            // Hash password
             const hashedPassword = await bcrypt.hash(password, 10);
-
-            // Simpan ke database
-            const insertQuery = 'INSERT INTO users (username, password, full_name) VALUES (?, ?, ?)';
-            db.query(insertQuery, [username, hashedPassword, full_name], (err, result) => {
-                if (err) return res.status(500).json({ error: err.message });
-                res.status(201).json({ message: 'Registrasi berhasil!' });
-            });
+            db.query(
+                'INSERT INTO users (username, password, full_name) VALUES (?, ?, ?)',
+                [username, hashedPassword, full_name],
+                (err) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    res.status(201).json({ message: 'Registrasi berhasil!' });
+                }
+            );
         } catch (hashErr) {
             res.status(500).json({ error: 'Gagal memproses password' });
         }
     });
 });
 
-// ==========================================
-// 2. ENDPOINT LOGIN
-// ==========================================
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
-
-    const query = 'SELECT * FROM users WHERE username = ?';
-    db.query(query, [username], async (err, results) => {
+    db.query('SELECT * FROM users WHERE username = ?', [username], async (err, results) => {
         if (err) return res.status(500).json({ error: err.message });
-
-        if (results.length === 0) {
-            return res.status(401).json({ message: 'Username tidak ditemukan!' });
-        }
+        if (results.length === 0) return res.status(401).json({ message: 'Username tidak ditemukan!' });
 
         const user = results[0];
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ message: 'Password salah!' });
-        }
+        if (!isMatch) return res.status(401).json({ message: 'Password salah!' });
 
         const token = jwt.sign(
             { id: user.id, username: user.username },
@@ -683,40 +550,45 @@ app.post('/login', (req, res) => {
     });
 });
 
+// ==========================================
+// GEMINI AI PREDICT
+// ==========================================
 app.post('/crypto/predict', async (req, res) => {
     if (!GEMINI_API_KEY) {
         return res.status(500).json({ message: 'GEMINI_API_KEY belum diset di .env' });
     }
- 
+
     const pair = (req.body.pair || 'BTCUSDT').toUpperCase();
     const validPairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT'];
- 
     if (!validPairs.includes(pair)) {
         return res.status(400).json({ message: `Pair tidak valid. Gunakan: ${validPairs.join(', ')}` });
     }
- 
+
+    const timeframe = req.body.timeframe || '1m';
+    const validTimeframes = ['1m', '5m', '15m'];
+    if (!validTimeframes.includes(timeframe)) {
+        return res.status(400).json({ message: `Timeframe tidak valid. Gunakan: ${validTimeframes.join(', ')}` });
+    }
+
     try {
-        // 1. Ambil harga terkini dari cache
         const priceData = priceCache.data.find((d) => d.pair === pair);
-        if (!priceData) {
-            return res.status(503).json({ message: 'Data harga belum tersedia, coba lagi.' });
-        }
- 
-        // 2. Ambil kline 15 candle terakhir (1m interval)
-        const klines = await refreshKlineCache(pair, '1m', 15);
-        const recentCloses = klines.map((k) => k.close.toFixed(4)).join(', ');
+        if (!priceData) return res.status(503).json({ message: 'Data harga belum tersedia, coba lagi.' });
+
+        const klines = await refreshKlineCache(pair, timeframe, 15);
+        const recentCloses  = klines.map((k) => k.close.toFixed(4)).join(', ');
         const recentVolumes = klines.map((k) => k.volume.toFixed(2)).join(', ');
- 
-        // 3. Hitung momentum sederhana dari kline
-        const lastClose = klines[klines.length - 1]?.close ?? priceData.price;
+        const lastClose  = klines[klines.length - 1]?.close ?? priceData.price;
         const firstClose = klines[0]?.close ?? priceData.price;
-        const momentum = lastClose - firstClose;
- 
-        // 4. Buat prompt untuk Gemini
+        const momentum   = lastClose - firstClose;
+
+        let durationText = '60 seconds';
+        if (timeframe === '5m') durationText = '5 minutes';
+        else if (timeframe === '15m') durationText = '15 minutes';
+
         const prompt = `You are a short-term crypto price direction analyst.
- 
-Analyze the following market data for ${pair} and predict whether the price will go UP or DOWN in the next 60 seconds.
- 
+
+Analyze the following market data for ${pair} and predict whether the price will go UP or DOWN in the next ${durationText}.
+
 ## Current Market Data
 - Pair: ${pair}
 - Current Price: $${priceData.price.toFixed(4)}
@@ -724,103 +596,82 @@ Analyze the following market data for ${pair} and predict whether the price will
 - 24h High: $${priceData.high24h.toFixed(4)}
 - 24h Low: $${priceData.low24h.toFixed(4)}
 - 24h Volume: ${priceData.volume24h.toFixed(2)}
- 
-## Last 15 Minutes (1m candle close prices)
+
+## Last 15 Candles (${timeframe} close prices)
 ${recentCloses}
- 
-## Last 15 Minutes (1m volumes)
+
+## Last 15 Candles (${timeframe} volumes)
 ${recentVolumes}
- 
-## Calculated Momentum (15m)
+
+## Calculated Momentum (15 candles of ${timeframe})
 Price change over last 15 candles: ${momentum >= 0 ? '+' : ''}${momentum.toFixed(4)}
- 
+
 ## Instructions
 Based on the data above:
-1. Determine if price will go UP or DOWN in the next 60 seconds
+1. Determine if price will go UP or DOWN in the next ${durationText}
 2. Rate your confidence: HIGH, MEDIUM, or LOW
 3. Give a very short reasoning (max 2 sentences, in Indonesian)
- 
+
 Respond ONLY in this exact JSON format (no markdown, no extra text):
-{"direction":"UP","confidence":"MEDIUM","reasoning":"Momentum 15 menit terakhir positif dengan volume meningkat. Harga berpotensi melanjutkan kenaikan jangka pendek."}`;
- 
-        // 5. Kirim ke Gemini API MENGGUNAKAN SDK
+{"direction":"UP","confidence":"MEDIUM","reasoning":"Momentum positif dengan volume meningkat. Harga berpotensi melanjutkan kenaikan jangka pendek."}`;
+
         const geminiModel = genAI.getGenerativeModel({
             model: "gemini-flash-latest",
             generationConfig: {
                 temperature: 0.3,
-                maxOutputTokens: 1000, // <-- Naikkan batas token agar tidak terpotong
-                responseMimeType: "application/json", // <-- Paksa Gemini merespons JSON utuh
-            }
+                maxOutputTokens: 1000,
+                responseMimeType: "application/json",
+            },
         });
 
         const geminiResp = await geminiModel.generateContent(prompt);
         const rawText = geminiResp.response.text();
- 
-        // 6. Parse response Gemini
+
         let prediction;
         try {
-            // Bersihkan kalau ada markdown code block
             const cleaned = rawText.replace(/```json|```/g, '').trim();
             prediction = JSON.parse(cleaned);
         } catch (_) {
             console.error('[Gemini] Parse error, raw:', rawText);
             return res.status(502).json({ message: 'Gagal parse response Gemini', raw: rawText });
         }
- 
-        // 7. Validasi direction
+
         if (!['UP', 'DOWN'].includes(prediction.direction)) {
             return res.status(502).json({ message: 'Direction tidak valid dari Gemini', raw: rawText });
         }
- 
+
         res.json({
             pair,
-            direction: prediction.direction,          // "UP" | "DOWN"
-            confidence: prediction.confidence ?? 'MEDIUM', // "HIGH" | "MEDIUM" | "LOW"
-            reasoning: prediction.reasoning ?? '',
+            direction:    prediction.direction,
+            confidence:   prediction.confidence ?? 'MEDIUM',
+            reasoning:    prediction.reasoning ?? '',
             currentPrice: priceData.price,
-            generatedAt: new Date().toISOString(),
+            generatedAt:  new Date().toISOString(),
         });
- 
     } catch (err) {
         console.error('[Predict] Error:', err.message);
         res.status(500).json({ message: 'Internal server error', error: err.message });
     }
 });
+
 // ==========================================
-// 3. ENDPOINT HARGA REALTIME
+// CRYPTO PRICES
 // ==========================================
 app.get('/crypto/prices', (_req, res) => {
     if (!priceCache.updatedAt) {
-        return res.status(503).json({
-            message: 'Server sedang inisialisasi, coba lagi dalam 2 detik.',
-        });
+        return res.status(503).json({ message: 'Server sedang inisialisasi, coba lagi dalam 2 detik.' });
     }
-
-    res.json({
-        source: 'binance',
-        quoteAsset: 'USDT',
-        updatedAt: priceCache.updatedAt,
-        data: priceCache.data,
-    });
+    res.json({ source: 'binance', quoteAsset: 'USDT', updatedAt: priceCache.updatedAt, data: priceCache.data });
 });
 
 // ==========================================
-// 4. ENDPOINT KLINE (SPARKLINE/CHART DATA) ← NEW
+// KLINE (SINGLE SYMBOL)
 // ==========================================
-/**
- * GET /crypto/klines?symbol=BTCUSDT&interval=1h&limit=24
- *
- * Query params:
- *   symbol   : Binance pair (default: BTCUSDT)
- *   interval : 1m, 5m, 15m, 1h, 4h, 1d (default: 1h)
- *   limit    : jumlah candle, max 100 (default: 24)
- */
 app.get('/crypto/klines', async (req, res) => {
-    const symbol = (req.query.symbol || 'BTCUSDT').toUpperCase();
+    const symbol   = (req.query.symbol || 'BTCUSDT').toUpperCase();
     const interval = req.query.interval || '1h';
-    const limit = Math.min(parseInt(req.query.limit) || 24, 100);
+    const limit    = Math.min(parseInt(req.query.limit) || 24, 100);
 
-    // Validasi interval
     const validIntervals = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d', '3d', '1w'];
     if (!validIntervals.includes(interval)) {
         return res.status(400).json({ message: `Interval tidak valid. Gunakan: ${validIntervals.join(', ')}` });
@@ -828,39 +679,20 @@ app.get('/crypto/klines', async (req, res) => {
 
     try {
         const klines = await refreshKlineCache(symbol, interval, limit);
-
-        res.json({
-            source: 'binance',
-            symbol,
-            interval,
-            limit,
-            count: klines.length,
-            data: klines,
-        });
+        res.json({ source: 'binance', symbol, interval, limit, count: klines.length, data: klines });
     } catch (err) {
         res.status(500).json({ message: 'Gagal mengambil data kline.', error: err.message });
     }
 });
 
 // ==========================================
-// 5. ENDPOINT KLINE BATCH (multiple symbols) ← NEW
+// KLINE BATCH (MULTI SYMBOL)
 // ==========================================
-/**
- * GET /crypto/klines/batch?symbols=BTCUSDT,ETHUSDT&interval=1h&limit=24
- *
- * Return sparkline data untuk beberapa symbol sekaligus,
- * berguna agar Flutter hanya butuh 1 request.
- */
 app.get('/crypto/klines/batch', async (req, res) => {
     const rawSymbols = req.query.symbols || 'BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT';
-    const symbols = rawSymbols
-        .split(',')
-        .map((s) => s.trim().toUpperCase())
-        .filter(Boolean)
-        .slice(0, 10); // max 10 symbols per request
-
+    const symbols = rawSymbols.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean).slice(0, 10);
     const interval = req.query.interval || '1h';
-    const limit = Math.min(parseInt(req.query.limit) || 24, 100);
+    const limit    = Math.min(parseInt(req.query.limit) || 24, 100);
 
     try {
         const results = await Promise.all(
@@ -868,7 +700,6 @@ app.get('/crypto/klines/batch', async (req, res) => {
                 const klines = await refreshKlineCache(symbol, interval, limit);
                 return {
                     symbol,
-                    // Return hanya close prices untuk efisiensi (sparkline)
                     closes: klines.map((k) => k.close),
                     updatedAt: klineCacheUpdatedAt[`${symbol}_${interval}_${limit}`]
                         ? new Date(klineCacheUpdatedAt[`${symbol}_${interval}_${limit}`]).toISOString()
@@ -876,20 +707,60 @@ app.get('/crypto/klines/batch', async (req, res) => {
                 };
             })
         );
-
-        res.json({
-            source: 'binance',
-            interval,
-            limit,
-            data: results,
-        });
+        res.json({ source: 'binance', interval, limit, data: results });
     } catch (err) {
         res.status(500).json({ message: 'Gagal mengambil data kline batch.', error: err.message });
     }
 });
 
 // ==========================================
-// 6. SSE STREAM
+// GAME SCORE  (butuh JWT — pakai authenticateToken)
+// ==========================================
+
+// GET /game/score — ambil score milik user yang sedang login
+app.get('/game/score', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const [rows] = await db.promise().query(
+            'SELECT total_score, total_rounds, total_wins, best_streak FROM game_scores WHERE user_id = ?',
+            [userId]
+        );
+        if (rows.length === 0) {
+            return res.json({ total_score: 0, total_rounds: 0, total_wins: 0, best_streak: 0 });
+        }
+        return res.json(rows[0]);
+    } catch (err) {
+        console.error('GET /game/score error:', err);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// POST /game/score — simpan/update score milik user yang sedang login
+app.post('/game/score', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { total_score, total_rounds, total_wins, best_streak } = req.body;
+
+        await db.promise().query(
+            `INSERT INTO game_scores (user_id, total_score, total_rounds, total_wins, best_streak)
+             VALUES (?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+               total_score  = VALUES(total_score),
+               total_rounds = VALUES(total_rounds),
+               total_wins   = VALUES(total_wins),
+               best_streak  = VALUES(best_streak)`,
+            [userId, total_score, total_rounds, total_wins, best_streak]
+        );
+
+        return res.json({ message: 'Score saved' });
+    } catch (err) {
+        console.error('POST /game/score error:', err);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// ==========================================
+// SSE STREAM
 // ==========================================
 const sseClients = new Set();
 
@@ -903,10 +774,8 @@ app.get('/crypto/prices/stream', (req, res) => {
     const sendData = () => {
         if (priceCache.updatedAt) {
             const payload = JSON.stringify({
-                source: 'binance',
-                quoteAsset: 'USDT',
-                updatedAt: priceCache.updatedAt,
-                data: priceCache.data,
+                source: 'binance', quoteAsset: 'USDT',
+                updatedAt: priceCache.updatedAt, data: priceCache.data,
             });
             res.write(`data: ${payload}\n\n`);
         }
@@ -916,7 +785,6 @@ app.get('/crypto/prices/stream', (req, res) => {
     sseClients.add(sendData);
 
     const heartbeat = setInterval(() => res.write(': ping\n\n'), 30000);
-
     req.on('close', () => {
         sseClients.delete(sendData);
         clearInterval(heartbeat);
@@ -926,30 +794,31 @@ app.get('/crypto/prices/stream', (req, res) => {
 setInterval(() => {
     if (sseClients.size > 0 && priceCache.updatedAt) {
         const payload = JSON.stringify({
-            source: 'binance',
-            quoteAsset: 'USDT',
-            updatedAt: priceCache.updatedAt,
-            data: priceCache.data,
+            source: 'binance', quoteAsset: 'USDT',
+            updatedAt: priceCache.updatedAt, data: priceCache.data,
         });
         for (const send of sseClients) {
-            try {
-                send(payload);
-            } catch (_) {
-                sseClients.delete(send);
-            }
+            try { send(payload); } catch (_) { sseClients.delete(send); }
         }
     }
 }, CACHE_TTL_MS);
 
+// ==========================================
+// START SERVER
+// ==========================================
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server Backend berjalan di http://0.0.0.0:${PORT}`);
     console.log(`Endpoints:`);
-    console.log(`  POST /qr-scan               - Simpan QR data (encrypted)`);
-    console.log(`  GET /qr-data                - Ambil QR data (decrypted)`);
+    console.log(`  POST /register              - Register user`);
     console.log(`  POST /login                 - Login user`);
-    console.log(`  GET /crypto/prices          - Harga realtime`);
-    console.log(`  GET /crypto/prices/stream   - SSE stream`);
-    console.log(`  GET /crypto/klines          - Kline/chart data (1 symbol)`);
-    console.log(`  GET /crypto/klines/batch    - Kline/chart data (multi symbol)`);
+    console.log(`  POST /qr-scan               - Simpan QR data (encrypted)`);
+    console.log(`  GET  /qr-data               - Ambil QR data (decrypted)`);
+    console.log(`  GET  /crypto/prices         - Harga realtime`);
+    console.log(`  GET  /crypto/prices/stream  - SSE stream`);
+    console.log(`  GET  /crypto/klines         - Kline/chart data (1 symbol)`);
+    console.log(`  GET  /crypto/klines/batch   - Kline/chart data (multi symbol)`);
+    console.log(`  POST /crypto/predict        - AI prediction (Gemini)`);
+    console.log(`  GET  /game/score            - Ambil game score [JWT]`);
+    console.log(`  POST /game/score            - Simpan game score [JWT]`);
 });

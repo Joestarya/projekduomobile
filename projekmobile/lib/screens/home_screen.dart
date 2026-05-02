@@ -14,12 +14,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  // Daftar halaman untuk Bottom Navigation
+  // IndexedStack butuh list yang dibuat sekali — jangan pindah ke dalam build()
   static final List<Widget> _widgetOptions = <Widget>[
     DashboardScreen(),
     AtmFinderScreen(),
     const GameScreen(),
-    ProfileMenu(), // Menu Profil & Saran Kesan (Wajib Tugas Akhir)
+    ProfileMenu(),
   ];
 
   void _onItemTapped(int index) {
@@ -31,16 +31,23 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      
-      body: _widgetOptions.elementAt(_selectedIndex),
+      // IndexedStack: semua screen tetap mount di background.
+      // GameScreen timer tidak akan cancel saat user pindah tab.
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _widgetOptions,
+      ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         backgroundColor: const Color(0xFF0C0F1A),
         items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Market'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.dashboard), label: 'Market'),
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Lokasi'),
-          BottomNavigationBarItem(icon: Icon(Icons.sports_esports), label: 'Game'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.sports_esports), label: 'Game'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person), label: 'Profil'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.white,

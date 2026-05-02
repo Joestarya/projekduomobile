@@ -67,6 +67,22 @@ ALTER TABLE `users`
 ALTER TABLE `users`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
+CREATE TABLE `game_scores` (
+  `id`           int(11)      NOT NULL AUTO_INCREMENT,
+  `user_id`      int(11)      NOT NULL,
+  `total_score`  int(11)      NOT NULL DEFAULT 0,
+  `total_rounds` int(11)      NOT NULL DEFAULT 0,
+  `total_wins`   int(11)      NOT NULL DEFAULT 0,
+  `best_streak`  int(11)      NOT NULL DEFAULT 0,
+  `updated_at`   timestamp    NOT NULL DEFAULT current_timestamp()
+                              ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `user_id` (`user_id`),
+  CONSTRAINT `fk_game_scores_user`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../service/api_config.dart';
 import '../../widgets/ai_prediction_card.dart';
 
@@ -14,6 +15,23 @@ enum GamePhase { idle, active, resolving, result }
 
 enum Prediction { up, down }
 
+// ── Timeframe config ──────────────────────────
+class _TF {
+  final String label;      // "1m" / "5m" / "15m"
+  final String interval;   // Binance interval param
+  final int durationSec;   // durasi round (detik)
+  final int candleLimit;   // jumlah candle di-fetch
+
+  const _TF(this.label, this.interval, this.durationSec, this.candleLimit);
+}
+
+const List<_TF> _timeframes = [
+  _TF('1m',  '1m',  60,   32),
+  _TF('5m',  '5m',  300,  24),
+  _TF('15m', '15m', 900,  20),
+];
+
+// ── Round result ──────────────────────────────
 class RoundResult {
   final Prediction prediction;
   final double entryPrice;
@@ -50,7 +68,7 @@ class _CandleChartPainter extends CustomPainter {
     if (candles.isEmpty) return;
 
     final allHigh = candles.map((c) => c['high']!).reduce(max);
-    final allLow = candles.map((c) => c['low']!).reduce(min);
+    final allLow  = candles.map((c) => c['low']!).reduce(min);
     final priceRange = (allHigh - allLow).abs();
     if (priceRange == 0) return;
 
@@ -64,7 +82,6 @@ class _CandleChartPainter extends CustomPainter {
     final candleW = (size.width / candles.length) * 0.55;
     final spacing = size.width / candles.length;
 
-    // Entry price dashed line
     if (entryPrice != null) {
       final ey = toY(entryPrice!);
       final dashPaint = Paint()
@@ -82,13 +99,12 @@ class _CandleChartPainter extends CustomPainter {
     }
 
     for (int i = 0; i < candles.length; i++) {
-      final c = candles[i];
+      final c  = candles[i];
       final cx = i * spacing + spacing / 2;
       final isUp = c['close']! >= c['open']!;
       final bodyColor =
           isUp ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
 
-      // Wick
       canvas.drawLine(
         Offset(cx, toY(c['high']!)),
         Offset(cx, toY(c['low']!)),
@@ -97,12 +113,12 @@ class _CandleChartPainter extends CustomPainter {
           ..strokeWidth = 1,
       );
 
-      // Body
       final bTop = min(toY(c['open']!), toY(c['close']!));
       final bBot = max(toY(c['open']!), toY(c['close']!));
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(cx - candleW / 2, bTop, candleW, max(bBot - bTop, 1.0)),
+          Rect.fromLTWH(
+              cx - candleW / 2, bTop, candleW, max(bBot - bTop, 1.0)),
           const Radius.circular(1),
         ),
         Paint()..color = bodyColor,
@@ -119,7 +135,7 @@ class _CandleChartPainter extends CustomPainter {
 // TIMER ARC PAINTER
 // ─────────────────────────────────────────────
 class _TimerArcPainter extends CustomPainter {
-  final double progress; // 1.0 → 0.0 as time runs out
+  final double progress;
 
   const _TimerArcPainter({required this.progress});
 
@@ -137,7 +153,6 @@ class _TimerArcPainter extends CustomPainter {
         ..strokeWidth = 3,
     );
 
-    // Color shifts: teal (full) → amber (mid) → red (low)
     final Color arcColor;
     if (progress > 0.5) {
       arcColor = const Color(0xFF26A69A);
@@ -171,7 +186,10 @@ class _TimerArcPainter extends CustomPainter {
   @override
   bool shouldRepaint(_TimerArcPainter o) => o.progress != progress;
 }
+
+// ─────────────────────────────────────────────
 // ASSET CONFIG
+// ─────────────────────────────────────────────
 const List<Map<String, String>> _assets = [
   {'pair': 'BTCUSDT', 'ticker': 'BTC', 'name': 'Bitcoin'},
   {'pair': 'ETHUSDT', 'ticker': 'ETH', 'name': 'Ethereum'},
@@ -186,7 +204,9 @@ const Map<String, Color> _assetColors = {
   'SOLUSDT': Color(0xFF9945FF),
 };
 
+// ─────────────────────────────────────────────
 // MAIN SCREEN
+// ─────────────────────────────────────────────
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
 
@@ -195,7 +215,9 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
-  static const int _roundSeconds = 60;
+  // ── Timeframe ──────────────────────────────
+  int _tfIndex = 0;
+  _TF get _tf => _timeframes[_tfIndex];
 
   // ── Game state ─────────────────────────────
   GamePhase _phase = GamePhase.idle;
@@ -203,7 +225,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   String _selectedPair = 'BTCUSDT';
   double _currentPrice = 0;
   double _entryPrice = 0;
-  double _secondsLeft = _roundSeconds.toDouble();
+  double _secondsLeft = 0;
 
   // ── Stats ──────────────────────────────────
   int _totalScore = 0;
@@ -221,15 +243,24 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Timer? _priceTimer;
   Timer? _countdownTimer;
 
-  // ── Animations (minimal) ───────────────────
+  // ── Score sync ─────────────────────────────
+  bool _scoreLoaded = false;
+  String? _authToken;
+
+  // ── Animations ─────────────────────────────
   late AnimationController _screenFadeController;
   late AnimationController _resultFadeController;
   late Animation<double> _screenFade;
   late Animation<double> _resultFade;
 
+  // ─────────────────────────────────────────────
+  // LIFECYCLE
+  // ─────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
+
+    _secondsLeft = _tf.durationSec.toDouble();
 
     _screenFadeController = AnimationController(
       vsync: this,
@@ -245,6 +276,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     _resultFade =
         CurvedAnimation(parent: _resultFadeController, curve: Curves.easeOut);
 
+    _loadScore();
     _fetchPrice();
     _fetchCandles();
     _priceTimer =
@@ -264,6 +296,103 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   // ─────────────────────────────────────────────
+  // SCORE PERSISTENCE  (SharedPrefs sebagai cache lokal + sync ke API)
+  // ─────────────────────────────────────────────
+
+  /// Ambil token dari SharedPreferences (disimpan saat login)
+  Future<String?> _getToken() async {
+    if (_authToken != null) return _authToken;
+    final prefs = await SharedPreferences.getInstance();
+    _authToken = prefs.getString('token');
+    return _authToken;
+  }
+
+  /// Load score: coba dari API dulu, fallback ke SharedPrefs lokal
+  Future<void> _loadScore() async {
+    // 1) Coba load dari SharedPrefs lokal dulu (agar UI cepat muncul)
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _totalScore  = prefs.getInt('game_total_score')  ?? 0;
+      _totalRounds = prefs.getInt('game_total_rounds') ?? 0;
+      _wins        = prefs.getInt('game_total_wins')   ?? 0;
+      _bestStreak  = prefs.getInt('game_best_streak')  ?? 0;
+    });
+
+    // 2) Sync dari server (lebih akurat, misalnya user pakai 2 device)
+    try {
+      final token = await _getToken();
+      if (token == null) return;
+
+      final resp = await http
+          .get(
+            Uri.parse(ApiConfig.endpoint('/game/score')),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final serverScore  = (data['total_score']  as num?)?.toInt() ?? 0;
+        final serverRounds = (data['total_rounds'] as num?)?.toInt() ?? 0;
+        final serverWins   = (data['total_wins']   as num?)?.toInt() ?? 0;
+        final serverBest   = (data['best_streak']  as num?)?.toInt() ?? 0;
+
+        // Pakai nilai terbesar antara lokal & server
+        if (mounted) {
+          setState(() {
+            _totalScore  = max(_totalScore,  serverScore);
+            _totalRounds = max(_totalRounds, serverRounds);
+            _wins        = max(_wins,        serverWins);
+            _bestStreak  = max(_bestStreak,  serverBest);
+          });
+        }
+
+        // Update cache lokal agar konsisten
+        await _saveScoreLocal();
+      }
+    } catch (_) {
+      // Tidak ada internet / server mati → tetap pakai data lokal
+    }
+
+    _scoreLoaded = true;
+  }
+
+  /// Simpan ke SharedPreferences (cache lokal)
+  Future<void> _saveScoreLocal() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('game_total_score',  _totalScore);
+    await prefs.setInt('game_total_rounds', _totalRounds);
+    await prefs.setInt('game_total_wins',   _wins);
+    await prefs.setInt('game_best_streak',  _bestStreak);
+  }
+
+  /// Kirim score ke server (fire-and-forget, tidak blokir UI)
+  Future<void> _syncScoreToServer() async {
+    try {
+      final token = await _getToken();
+      if (token == null) return;
+
+      await http
+          .post(
+            Uri.parse(ApiConfig.endpoint('/game/score')),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'total_score':  _totalScore,
+              'total_rounds': _totalRounds,
+              'total_wins':   _wins,
+              'best_streak':  _bestStreak,
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
+    } catch (_) {
+      // Gagal sync → sudah tersimpan lokal, akan sync lagi nanti
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // DATA FETCHING
   // ─────────────────────────────────────────────
   Future<void> _fetchPrice() async {
@@ -272,7 +401,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           .get(Uri.parse(ApiConfig.endpoint('/crypto/prices')))
           .timeout(const Duration(seconds: 4));
       if (resp.statusCode != 200) return;
-      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final body  = jsonDecode(resp.body) as Map<String, dynamic>;
       final List assets = (body['data'] as List?) ?? [];
       final match = assets.firstWhere(
         (a) => a['pair'] == _selectedPair,
@@ -287,8 +416,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   Future<void> _fetchCandles() async {
     final urls = [
       ApiConfig.endpoint(
-          '/crypto/klines?symbol=$_selectedPair&interval=1m&limit=32'),
-      'https://api.binance.com/api/v3/klines?symbol=$_selectedPair&interval=1m&limit=32',
+          '/crypto/klines?symbol=$_selectedPair&interval=${_tf.interval}&limit=${_tf.candleLimit}'),
+      'https://api.binance.com/api/v3/klines?symbol=$_selectedPair&interval=${_tf.interval}&limit=${_tf.candleLimit}',
     ];
     for (final url in urls) {
       try {
@@ -301,16 +430,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         final parsed = raw.map<Map<String, double>>((k) {
           if (k is Map) {
             return {
-              'open': (k['open'] as num).toDouble(),
-              'high': (k['high'] as num).toDouble(),
-              'low': (k['low'] as num).toDouble(),
+              'open':  (k['open']  as num).toDouble(),
+              'high':  (k['high']  as num).toDouble(),
+              'low':   (k['low']   as num).toDouble(),
               'close': (k['close'] as num).toDouble(),
             };
           }
           return {
-            'open': double.parse(k[1].toString()),
-            'high': double.parse(k[2].toString()),
-            'low': double.parse(k[3].toString()),
+            'open':  double.parse(k[1].toString()),
+            'high':  double.parse(k[2].toString()),
+            'low':   double.parse(k[3].toString()),
             'close': double.parse(k[4].toString()),
           };
         }).toList();
@@ -320,16 +449,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     }
   }
 
+  // ─────────────────────────────────────────────
   // GAME LOGIC
+  // ─────────────────────────────────────────────
   void _startRound(Prediction pred) {
     if (_phase != GamePhase.idle || _currentPrice == 0) return;
     HapticFeedback.selectionClick();
 
     setState(() {
-      _prediction = pred;
-      _phase = GamePhase.active;
-      _entryPrice = _currentPrice;
-      _secondsLeft = _roundSeconds.toDouble();
+      _prediction  = pred;
+      _phase       = GamePhase.active;
+      _entryPrice  = _currentPrice;
+      _secondsLeft = _tf.durationSec.toDouble();
     });
 
     _countdownTimer?.cancel();
@@ -352,22 +483,21 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     await _fetchPrice();
     await Future.delayed(const Duration(milliseconds: 200));
 
-    final exitPrice = _currentPrice;
+    final exitPrice   = _currentPrice;
     final priceWentUp = exitPrice > _entryPrice;
-    final correct = (_prediction == Prediction.up && priceWentUp) ||
-        (_prediction == Prediction.down && !priceWentUp);
-
-    final earned = correct ? 100 + (_streak * 20) : 0;
+    final correct = (_prediction == Prediction.up  &&  priceWentUp) ||
+                    (_prediction == Prediction.down && !priceWentUp);
+    final earned  = correct ? 100 + (_streak * 20) : 0;
 
     HapticFeedback.lightImpact();
 
     final result = RoundResult(
-      prediction: _prediction!,
-      entryPrice: _entryPrice,
-      exitPrice: exitPrice,
-      isCorrect: correct,
+      prediction:   _prediction!,
+      entryPrice:   _entryPrice,
+      exitPrice:    exitPrice,
+      isCorrect:    correct,
       pointsEarned: earned,
-      timestamp: DateTime.now(),
+      timestamp:    DateTime.now(),
     );
 
     setState(() {
@@ -386,6 +516,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       if (_history.length > 20) _history.removeLast();
     });
 
+    // Simpan lokal dulu (cepat), lalu sync ke server
+    await _saveScoreLocal();
+    _syncScoreToServer(); // fire-and-forget
+
     _resultFadeController.forward(from: 0);
     await _fetchCandles();
   }
@@ -393,10 +527,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   void _resetRound() {
     _resultFadeController.reset();
     setState(() {
-      _phase = GamePhase.idle;
-      _prediction = null;
-      _lastResult = null;
-      _secondsLeft = _roundSeconds.toDouble();
+      _phase       = GamePhase.idle;
+      _prediction  = null;
+      _lastResult  = null;
+      _secondsLeft = _tf.durationSec.toDouble();
     });
   }
 
@@ -405,9 +539,20 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     setState(() {
       _selectedPair = pair;
       _currentPrice = 0;
-      _candles = [];
+      _candles      = [];
     });
     _fetchPrice();
+    _fetchCandles();
+  }
+
+  /// Ganti timeframe — hanya boleh saat idle
+  void _selectTimeframe(int index) {
+    if (_phase != GamePhase.idle) return;
+    setState(() {
+      _tfIndex     = index;
+      _secondsLeft = _timeframes[index].durationSec.toDouble();
+      _candles     = [];
+    });
     _fetchCandles();
   }
 
@@ -428,10 +573,20 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     return '$sign${v.toStringAsFixed(v.abs() < 1 ? 4 : decimals)}';
   }
 
+  /// Format detik menjadi "4:32" atau "14:59"
+  String _fmtCountdown(double sec) {
+    final s = sec.ceil();
+    final m = s ~/ 60;
+    final r = s % 60;
+    return '$m:${r.toString().padLeft(2, '0')}';
+  }
+
   double get _accuracy =>
       _totalRounds == 0 ? 0 : (_wins / _totalRounds * 100);
 
+  // ─────────────────────────────────────────────
   // BUILD
+  // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -451,6 +606,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     children: [
                       const SizedBox(height: 18),
                       _buildAssetTabs(),
+                      const SizedBox(height: 10),
+                      // ── TIMEFRAME SELECTOR ──
+                      _buildTimeframeTabs(),
                       const SizedBox(height: 12),
                       _buildPriceTicker(),
                       const SizedBox(height: 12),
@@ -470,14 +628,18 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
-  
+  // ─────────────────────────────────────────────
   // HEADER
+  // ─────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
       decoration: BoxDecoration(
-        border:
-            Border(bottom: BorderSide(color: Theme.of(context).dividerTheme.color ?? Colors.transparent, width: 1)),
+        border: Border(
+            bottom: BorderSide(
+                color: Theme.of(context).dividerTheme.color ??
+                    Colors.transparent,
+                width: 1)),
       ),
       child: Row(
         children: [
@@ -497,7 +659,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 ),
                 Text(
                   'Practice reading price direction',
-                  style: TextStyle(color: Color(0xFF2A3A5A), fontSize: 11),
+                  style:
+                      TextStyle(color: Color(0xFF2A3A5A), fontSize: 11),
                 ),
               ],
             ),
@@ -530,68 +693,91 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
-  // STATS BAR
-  Widget _buildStatsBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        border:
-            Border(bottom: BorderSide(color: Theme.of(context).dividerTheme.color ?? Colors.transparent, width: 1)),
-      ),
-      child: Row(
-        children: [
-          _statCell('Accuracy', '${_accuracy.toStringAsFixed(0)}%'),
-          _statDivider(),
-          _statCell(
-            'Streak',
-            '$_streak',
-            valueColor: _streak >= 3
-                ? const Color(0xFF26A69A)
-                : Colors.white,
+  // ─────────────────────────────────────────────
+  // TIMEFRAME TABS  ← NEW
+  // ─────────────────────────────────────────────
+  Widget _buildTimeframeTabs() {
+    final isDisabled = _phase != GamePhase.idle;
+    return Row(
+      children: [
+        const Text(
+          'TIMEFRAME',
+          style: TextStyle(
+            color: Color(0xFF1A2535),
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.4,
           ),
-          _statDivider(),
-          _statCell('Best', '$_bestStreak'),
-          _statDivider(),
-          _statCell('Rounds', '$_totalRounds'),
-        ],
-      ),
-    );
-  }
-
-  Widget _statCell(String label, String value,
-      {Color valueColor = Colors.white}) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(value,
-              style: TextStyle(
-                color: valueColor,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              )),
-          const SizedBox(height: 2),
-          Text(label,
+        ),
+        const SizedBox(width: 10),
+        ...List.generate(_timeframes.length, (i) {
+          final tf         = _timeframes[i];
+          final isSelected = i == _tfIndex;
+          return GestureDetector(
+            onTap: isDisabled ? null : () => _selectTimeframe(i),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              margin: const EdgeInsets.only(right: 6),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? const Color(0xFF26A69A).withOpacity(0.12)
+                    : const Color(0xFF0C1018),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: isSelected
+                      ? const Color(0xFF26A69A).withOpacity(0.4)
+                      : const Color(0xFF0E1420),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                tf.label,
+                style: TextStyle(
+                  color: isSelected
+                      ? const Color(0xFF26A69A)
+                      : isDisabled
+                          ? const Color(0xFF1A2535)
+                          : const Color(0xFF3A5070),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          );
+        }),
+        if (isDisabled) ...[
+          const Spacer(),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0C1018),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                  color: const Color(0xFF1A2535), width: 1),
+            ),
+            child: const Text(
+              'Locked during round',
               style:
-                  const TextStyle(color: Color(0xFF2A3A5A), fontSize: 10)),
+                  TextStyle(color: Color(0xFF1A2535), fontSize: 9),
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
 
-  Widget _statDivider() => Container(
-        width: 1,
-        height: 24,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        color: Theme.of(context).dividerTheme.color,
-      );
-
+  // ─────────────────────────────────────────────
   // ASSET TABS
+  // ─────────────────────────────────────────────
   Widget _buildAssetTabs() {
     return Row(
       children: _assets.asMap().entries.map((entry) {
-        final i = entry.key;
-        final a = entry.value;
-        final pair = a['pair']!;
+        final i          = entry.key;
+        final a          = entry.value;
+        final pair       = a['pair']!;
         final isSelected = pair == _selectedPair;
         final isDisabled = _phase != GamePhase.idle;
         final accentColor = _assetColors[pair]!;
@@ -601,7 +787,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             onTap: isDisabled ? null : () => _selectPair(pair),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
-              margin: EdgeInsets.only(right: i < _assets.length - 1 ? 6 : 0),
+              margin:
+                  EdgeInsets.only(right: i < _assets.length - 1 ? 6 : 0),
               padding: const EdgeInsets.symmetric(vertical: 9),
               decoration: BoxDecoration(
                 color: isSelected
@@ -611,7 +798,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 border: Border.all(
                   color: isSelected
                       ? accentColor.withOpacity(0.3)
-                      : Theme.of(context).dividerTheme.color ?? Colors.transparent,
+                      : Theme.of(context).dividerTheme.color ??
+                          Colors.transparent,
                   width: 1,
                 ),
               ),
@@ -648,20 +836,26 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       }).toList(),
     );
   }
+
+  // ─────────────────────────────────────────────
   // PRICE TICKER
+  // ─────────────────────────────────────────────
   Widget _buildPriceTicker() {
-    final meta = _assets.firstWhere((a) => a['pair'] == _selectedPair);
+    final meta        = _assets.firstWhere((a) => a['pair'] == _selectedPair);
     final accentColor = _assetColors[_selectedPair]!;
-    final inRound = _phase == GamePhase.active;
-    final delta = inRound ? _currentPrice - _entryPrice : 0.0;
-    final isAhead = delta >= 0;
+    final inRound     = _phase == GamePhase.active;
+    final delta       = inRound ? _currentPrice - _entryPrice : 0.0;
+    final isAhead     = delta >= 0;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Theme.of(context).cardTheme.color,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Theme.of(context).dividerTheme.color ?? Colors.transparent, width: 1),
+        border: Border.all(
+            color: Theme.of(context).dividerTheme.color ??
+                Colors.transparent,
+            width: 1),
       ),
       child: Row(
         children: [
@@ -671,7 +865,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             decoration: BoxDecoration(
               color: accentColor.withOpacity(0.08),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: accentColor.withOpacity(0.15), width: 1),
+              border: Border.all(
+                  color: accentColor.withOpacity(0.15), width: 1),
             ),
             alignment: Alignment.center,
             child: Text(
@@ -691,7 +886,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                   style: const TextStyle(
                       color: Color(0xFF3A5070), fontSize: 12)),
               Text(
-                '${meta['ticker']!}/USDT',
+                '${meta['ticker']!}/USDT · ${_tf.label}',
                 style: const TextStyle(
                     color: Color(0xFF1A2535), fontSize: 10),
               ),
@@ -746,7 +941,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
+
+  // ─────────────────────────────────────────────
   // CHART
+  // ─────────────────────────────────────────────
   Widget _buildChart() {
     return Container(
       height: 130,
@@ -754,16 +952,19 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Theme.of(context).dividerTheme.color ?? Colors.transparent, width: 1),
+        border: Border.all(
+            color: Theme.of(context).dividerTheme.color ??
+                Colors.transparent,
+            width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Text(
-                '1-MIN CANDLES',
-                style: TextStyle(
+              Text(
+                '${_tf.label.toUpperCase()} CANDLES',
+                style: const TextStyle(
                   color: Color(0xFF1A2535),
                   fontSize: 9,
                   fontWeight: FontWeight.w700,
@@ -783,7 +984,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 const SizedBox(width: 4),
                 const Text(
                   'Entry line',
-                  style: TextStyle(color: Color(0xFF1A2535), fontSize: 9),
+                  style:
+                      TextStyle(color: Color(0xFF1A2535), fontSize: 9),
                 ),
               ],
             ],
@@ -815,7 +1017,10 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
+
+  // ─────────────────────────────────────────────
   // GAME SECTION (routing)
+  // ─────────────────────────────────────────────
   Widget _buildGameSection() {
     switch (_phase) {
       case GamePhase.idle:
@@ -828,19 +1033,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
         return _buildResultPanel();
     }
   }
-  // ── IDLE ──────────────────────────────────
+
+  // ── IDLE ──────────────────────────────────────
   Widget _buildIdlePanel() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-      
-        AiPredictionCard(selectedPair: _selectedPair),
-
-
+        AiPredictionCard(selectedPair: _selectedPair, timeframe: _tf.interval),
         const SizedBox(height: 6),
-        const Text(
-          'Where will the price be in 60 seconds?',
-          style: TextStyle(color: Color(0xFF3A5070), fontSize: 13),
+        Text(
+          'Where will the price be in ${_tf.label}?',
+          style: const TextStyle(color: Color(0xFF3A5070), fontSize: 13),
         ),
         const SizedBox(height: 14),
         Row(
@@ -859,7 +1062,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             SizedBox(width: 5),
             Text(
               '+100 pts base  ·  +20 pts per streak level',
-              style: TextStyle(color: Color(0xFF1A2535), fontSize: 11),
+              style:
+                  TextStyle(color: Color(0xFF1A2535), fontSize: 11),
             ),
           ],
         ),
@@ -868,18 +1072,21 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
   }
 
   Widget _forecastButton(Prediction pred) {
-    final isUp = pred == Prediction.up;
-    final color =
-        isUp ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
+    final isUp    = pred == Prediction.up;
+    final color   = isUp
+        ? const Color(0xFF26A69A)
+        : const Color(0xFFEF5350);
 
     return GestureDetector(
       onTap: () => _startRound(pred),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+        padding:
+            const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
         decoration: BoxDecoration(
           color: const Color(0xFF0C1018),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.18), width: 1),
+          border:
+              Border.all(color: color.withOpacity(0.18), width: 1),
         ),
         child: Row(
           children: [
@@ -921,19 +1128,17 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
-  // ── ACTIVE ─────────────────────────────────
+
+  // ── ACTIVE ───────────────────────────────────
   Widget _buildActivePanel() {
-    final progress = _secondsLeft / _roundSeconds;
-    final isUp = _prediction == Prediction.up;
-    final predColor = isUp ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
-    final delta = _currentPrice - _entryPrice;
-    final onTrack = (isUp && delta > 0) || (!isUp && delta < 0);
+    final progress  = _secondsLeft / _tf.durationSec;
+    final isUp      = _prediction == Prediction.up;
+    final delta     = _currentPrice - _entryPrice;
+    final onTrack   = (isUp && delta > 0) || (!isUp && delta < 0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-
-        // Timer row
         Row(
           children: [
             SizedBox(
@@ -946,12 +1151,15 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     size: const Size(60, 60),
                     painter: _TimerArcPainter(progress: progress),
                   ),
+                  // Tampilkan m:ss untuk timeframe > 1m
                   Text(
-                    _secondsLeft.ceil().toString(),
-                    style: const TextStyle(
+                    _tf.durationSec > 60
+                        ? _fmtCountdown(_secondsLeft)
+                        : _secondsLeft.ceil().toString(),
+                    style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
-                      fontSize: 17,
+                      fontSize: _tf.durationSec > 60 ? 11 : 17,
                     ),
                   ),
                 ],
@@ -962,7 +1170,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Resolves in ${_secondsLeft.ceil()} seconds',
+                  'Resolves in ${_fmtCountdown(_secondsLeft)}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
@@ -984,9 +1192,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      onTrack
-                          ? 'Correct'
-                          : 'Off track',
+                      onTrack ? 'Correct' : 'Off track',
                       style: TextStyle(
                         color: onTrack
                             ? const Color(0xFF26A69A)
@@ -995,6 +1201,12 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Timeframe: ${_tf.label}',
+                  style: const TextStyle(
+                      color: Color(0xFF1A2535), fontSize: 10),
                 ),
               ],
             ),
@@ -1005,14 +1217,16 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           onPressed: () {
             _countdownTimer?.cancel();
             setState(() {
-              _phase = GamePhase.idle;
-              _prediction = null;
+              _phase       = GamePhase.idle;
+              _prediction  = null;
+              _secondsLeft = _tf.durationSec.toDouble();
             });
           },
           style: TextButton.styleFrom(
             foregroundColor: const Color(0xFF2A3A5A),
             minimumSize: Size.zero,
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           child: const Text('Cancel round',
@@ -1021,7 +1235,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ],
     );
   }
-  // ── RESOLVING ──────────────────────────────
+
+  // ── RESOLVING ────────────────────────────────
   Widget _buildResolvingPanel() {
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: 18),
@@ -1044,12 +1259,14 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       ),
     );
   }
-  // ── RESULT ─────────────────────────────────
+
+  // ── RESULT ───────────────────────────────────
   Widget _buildResultPanel() {
-    final r = _lastResult!;
-    final correct = r.isCorrect;
-    final accentColor =
-        correct ? const Color(0xFF26A69A) : const Color(0xFFEF5350);
+    final r           = _lastResult!;
+    final correct     = r.isCorrect;
+    final accentColor = correct
+        ? const Color(0xFF26A69A)
+        : const Color(0xFFEF5350);
     final deltaPct = r.entryPrice == 0
         ? 0.0
         : ((r.exitPrice - r.entryPrice) / r.entryPrice) * 100;
@@ -1059,7 +1276,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Outcome row
           Row(
             children: [
               Container(
@@ -1082,9 +1298,7 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    correct
-                        ? 'Correct forecast'
-                        : 'Incorrect forecast',
+                    correct ? 'Correct forecast' : 'Incorrect forecast',
                     style: TextStyle(
                       color: accentColor,
                       fontWeight: FontWeight.w700,
@@ -1103,8 +1317,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ],
           ),
           const SizedBox(height: 14),
-
-          // Data table
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -1115,14 +1327,14 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ),
             child: Column(
               children: [
-                _dataRow('Entry price', _fmtPrice(r.entryPrice),
-                    Colors.white),
+                _dataRow(
+                    'Entry price', _fmtPrice(r.entryPrice), Colors.white),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
                   child: Divider(color: Color(0xFF0E1420), height: 1),
                 ),
-                _dataRow('Exit price', _fmtPrice(r.exitPrice),
-                    Colors.white),
+                _dataRow(
+                    'Exit price', _fmtPrice(r.exitPrice), Colors.white),
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
                   child: Divider(color: Color(0xFF0E1420), height: 1),
@@ -1151,8 +1363,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
             ),
           ),
           const SizedBox(height: 14),
-
-          // New round button
           GestureDetector(
             onTap: _resetRound,
             child: Container(
@@ -1197,7 +1407,9 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
     );
   }
 
+  // ─────────────────────────────────────────────
   // HISTORY
+  // ─────────────────────────────────────────────
   Widget _buildHistory() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1222,8 +1434,6 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           ],
         ),
         const SizedBox(height: 10),
-
-        // Outcome trail (last 10)
         Row(
           children: _history.take(10).toList().reversed.map((r) {
             final c = r.isCorrect
@@ -1236,10 +1446,13 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
               decoration: BoxDecoration(
                 color: c.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: c.withOpacity(0.2), width: 1),
+                border:
+                    Border.all(color: c.withOpacity(0.2), width: 1),
               ),
               child: Icon(
-                r.isCorrect ? Icons.north_rounded : Icons.south_rounded,
+                r.isCorrect
+                    ? Icons.north_rounded
+                    : Icons.south_rounded,
                 color: c,
                 size: 10,
               ),
@@ -1247,10 +1460,8 @@ class _GameScreenState extends State<GameScreen> with TickerProviderStateMixin {
           }).toList(),
         ),
         const SizedBox(height: 10),
-
-        // Recent 5 rows
         ..._history.take(5).map((r) {
-          final correct = r.isCorrect;
+          final correct   = r.isCorrect;
           final lineColor = correct
               ? const Color(0xFF26A69A)
               : const Color(0xFFEF5350);
