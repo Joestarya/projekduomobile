@@ -296,18 +296,7 @@ async function fetchBinanceAuth(path, apiKey, secretKey, method = 'GET') {
         }
     }
 
-    if (path.includes('/account')) {
-        console.warn(`[fetchBinanceAuth] Semua endpoint gagal karena blokir ISP. Menggunakan data MOCK.`);
-        return {
-            balances: [
-                { asset: 'BTC',  free: '0.015', locked: '0' },
-                { asset: 'ETH',  free: '1.25',  locked: '0' },
-                { asset: 'BNB',  free: '10.5',  locked: '0' },
-                { asset: 'SOL',  free: '25.0',  locked: '0' },
-                { asset: 'USDT', free: '150.0', locked: '0' },
-            ],
-        };
-    }
+   
 
     throw new Error(`Semua endpoint Binance gagal. ${lastError || ''}`.trim());
 }
@@ -325,6 +314,8 @@ async function refreshPriceCache() {
         { symbol: 'BNBUSDT', name: 'BNB',      short: 'BNB' },
         { symbol: 'SOLUSDT', name: 'Solana',   short: 'SOL' },
         { symbol: 'USDTIDRT', name: 'Rupiah Token', short: 'USDT_IDR' },
+        { symbol: 'EURUSDT', name: 'EURO Token', short: 'USDT_EUR' },
+
     ];
 
     try {

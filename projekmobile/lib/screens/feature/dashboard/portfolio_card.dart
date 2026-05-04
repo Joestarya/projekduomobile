@@ -4,27 +4,31 @@ import '../../../models/asset_item.dart';
 class PortfolioCard extends StatelessWidget {
   final bool isPrivacyMode;
   final bool isPortfolioConnected;
-  final bool isIdrMode;
+  final String currencyMode;
   final double totalBalance;
   final double idrRate;
+  final double eurRate;
   final Map<String, double> userBalances;
   final List<AssetItem> assets;
   final VoidCallback onTogglePrivacy;
   final String Function(double) formatIdr;
   final String Function(double) formatUsd;
+  final String Function(double) formatEur;
 
   const PortfolioCard({
     super.key,
     required this.isPrivacyMode,
     required this.isPortfolioConnected,
-    required this.isIdrMode,
+    required this.currencyMode,
     required this.totalBalance,
     required this.idrRate,
+    required this.eurRate,
     required this.userBalances,
     required this.assets,
     required this.onTogglePrivacy,
     required this.formatIdr,
     required this.formatUsd,
+    required this.formatEur,
   });
 
   @override
@@ -61,9 +65,11 @@ class PortfolioCard extends StatelessWidget {
                 ? '•••••••••'
                 : (!isPortfolioConnected
                       ? 'Data tidak tersedia'
-                      : (isIdrMode
+                      : (currencyMode == 'IDR'
                             ? formatIdr(totalBalance * idrRate)
-                            : formatUsd(totalBalance))),
+                            : (currencyMode == 'EUR'
+                                ? formatEur(totalBalance * eurRate)
+                                : formatUsd(totalBalance)))),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 28,

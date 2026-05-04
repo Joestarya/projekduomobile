@@ -75,7 +75,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // ── State ──────────────────────────────────
   bool _isPrivacyMode = false;
-  bool _isIdrMode = true;
+  String _currencyMode = 'IDR';
   double _totalBalance = 0.0;
   Map<String, double> _userBalances = {};
   bool _isPortfolioConnected = false;
@@ -298,6 +298,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     return idrAsset?.priceUsd ?? 17333.0;
   }
 
+  double _getEurRate() {
+    final eurAsset = _assets.where((a) => a.symbol == 'EUR').firstOrNull;
+    if (eurAsset != null && eurAsset.priceUsd > 0) {
+      return 1 / eurAsset.priceUsd;
+    }
+    return 0.92;
+  }
+
   void _calculateTotalBalance() {
     double total = 0.0;
     for (var entry in _userBalances.entries) {
@@ -311,6 +319,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         total += amount;
       } else if (asset == 'IDR' || asset == 'BIDR' || asset == 'IDRT') {
         total += amount / _getIdrRate();
+      } else if (asset == 'EUR') {
+        total += amount / _getEurRate();
       } else {
         final assetItem = _assets.where((a) => a.symbol == asset).firstOrNull;
         if (assetItem != null) {
@@ -491,6 +501,17 @@ class _DashboardScreenState extends State<DashboardScreen>
     return 'Rp ${fixed.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.')}';
   }
 
+  String _formatEur(double value) {
+    if (value >= 10000) {
+      final fixed = value.toStringAsFixed(0);
+      return '€${fixed.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',')}';
+    } else if (value >= 1) {
+      return '€${value.toStringAsFixed(2).replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',')}';
+    } else {
+      return '€${value.toStringAsFixed(4)}';
+    }
+  }
+
   String _formatUpdatedTime(String isoTime) {
     final dt = DateTime.tryParse(isoTime)?.toLocal();
     if (dt == null) return '-';
@@ -526,15 +547,17 @@ class _DashboardScreenState extends State<DashboardScreen>
                   child: PortfolioCard(
                     isPrivacyMode: _isPrivacyMode,
                     isPortfolioConnected: _isPortfolioConnected,
-                    isIdrMode: _isIdrMode,
+                    currencyMode: _currencyMode,
                     totalBalance: _totalBalance,
                     idrRate: _getIdrRate(),
+                    eurRate: _getEurRate(),
                     userBalances: _userBalances,
                     assets: _assets,
                     onTogglePrivacy: () =>
                         setState(() => _isPrivacyMode = !_isPrivacyMode),
                     formatIdr: _formatIdr,
                     formatUsd: _formatUsd,
+                    formatEur: _formatEur,
                   ),
                 ),
               ),
@@ -747,7 +770,13 @@ class _DashboardScreenState extends State<DashboardScreen>
           icon: const Icon(Icons.currency_exchange, color: Colors.white70),
           onPressed: () {
             setState(() {
-              _isIdrMode = !_isIdrMode;
+              if (_currencyMode == 'USD') {
+                _currencyMode = 'IDR';
+              } else if (_currencyMode == 'IDR') {
+                _currencyMode = 'EUR';
+              } else {
+                _currencyMode = 'USD';
+              }
             });
           },
         ),
@@ -805,7 +834,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       );
     }
 
-    final displayAssets = _assets.where((a) => a.symbol != 'USDT_IDR').toList();
+    final displayAssets = _assets.where((a) => a.symbol != 'USDT_IDR' && a.symbol != 'EUR').toList();
     return ListView.builder(
       padding: const EdgeInsets.only(top: 4, bottom: 16),
       itemCount: displayAssets.length,
@@ -830,7 +859,11 @@ class _DashboardScreenState extends State<DashboardScreen>
             flashColor: _flashColors[displayAssets[index].symbol],
             sparkData: _sparklineCache[displayAssets[index].pair],
             userBalance: _userBalances[displayAssets[index].symbol] ?? 0.0,
-            priceDisplay: _formatUsd(displayAssets[index].priceUsd),
+            priceDisplay: _currencyMode == 'IDR'
+                ? _formatIdr(displayAssets[index].priceUsd * _getIdrRate())
+                : (_currencyMode == 'EUR'
+                    ? _formatEur(displayAssets[index].priceUsd * _getEurRate())
+                    : _formatUsd(displayAssets[index].priceUsd)),
             changePercentDisplay: _formatChangePercent(
               displayAssets[index].changePercent,
             ),
