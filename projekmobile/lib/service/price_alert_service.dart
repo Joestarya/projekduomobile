@@ -1,17 +1,3 @@
-// ============================================================
-// lib/service/price_alert_service.dart
-// ============================================================
-// Setup:
-//   1. Tambah dependency di pubspec.yaml:
-//        flutter_local_notifications: ^17.0.0
-//   2. Di AndroidManifest.xml dalam <manifest>:
-//        <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-//        <uses-permission android:name="android.permission.VIBRATE"/>
-//   3. Panggil PriceAlertService.init() di main.dart
-//   4. Panggil PriceAlertService.startPolling(userId) setelah login
-//   5. Panggil PriceAlertService.stopPolling() saat logout
-// ============================================================
-
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';

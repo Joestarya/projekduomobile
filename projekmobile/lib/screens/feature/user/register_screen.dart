@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import '../../service/api_config.dart';
+import '../../../service/api_config.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -83,12 +83,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.person_add_rounded, size: 80, color: Theme.of(context).primaryColor),
+              Icon(
+                Icons.person_add_rounded,
+                size: 80,
+                color: Theme.of(context).primaryColor,
+              ),
               const SizedBox(height: 24),
               const Text(
                 'Create Account',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -101,7 +109,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _fullNameController,
                 decoration: const InputDecoration(
                   labelText: 'Nama Lengkap',
-                  prefixIcon: Icon(Icons.person_outline, color: Color(0xFF8B9BB4)),
+                  prefixIcon: Icon(
+                    Icons.person_outline,
+                    color: Color(0xFF8B9BB4),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -109,7 +120,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _usernameController,
                 decoration: const InputDecoration(
                   labelText: 'Email',
-                  prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF8B9BB4)),
+                  prefixIcon: Icon(
+                    Icons.email_outlined,
+                    color: Color(0xFF8B9BB4),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -118,7 +132,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 obscureText: true,
                 decoration: const InputDecoration(
                   labelText: 'Password',
-                  prefixIcon: Icon(Icons.lock_outline, color: Color(0xFF8B9BB4)),
+                  prefixIcon: Icon(
+                    Icons.lock_outline,
+                    color: Color(0xFF8B9BB4),
+                  ),
                 ),
               ),
               const SizedBox(height: 32),
@@ -126,14 +143,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton(
                       onPressed: _register,
-                      child: const Text('Daftar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        'Daftar',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
               const SizedBox(height: 24),
               TextButton(
                 onPressed: () {
                   Navigator.pop(context);
                 },
-                child: const Text('Sudah punya akun? Login', style: TextStyle(color: Color(0xFF638BFF))),
+                child: const Text(
+                  'Sudah punya akun? Login',
+                  style: TextStyle(color: Color(0xFF638BFF)),
+                ),
               ),
             ],
           ),

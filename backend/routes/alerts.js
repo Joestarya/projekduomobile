@@ -3,7 +3,29 @@ const router = express.Router();
 const db = require('../db');
 const { priceCache } = require('../services/binance');
 
-router.get('/alerts', (req, res) => {
+const ensurePriceAlertsTable = new Promise((resolve) => {
+  db.query(
+    `
+    CREATE TABLE IF NOT EXISTS price_alerts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      coin_symbol VARCHAR(10) NOT NULL,
+      target_price DECIMAL(20, 8) NOT NULL,
+      direction ENUM('up', 'down') NOT NULL,
+      status ENUM('active', 'triggered') DEFAULT 'active',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX (user_id),
+      INDEX (status)
+    )
+    `,
+    () => resolve()
+  );
+});
+
+router.get('/alerts', async (req, res) => {
+  await ensurePriceAlertsTable;
   const userId = parseInt(req.query.user_id);
   if (!userId) return res.status(400).json({ message: 'user_id diperlukan' });
  
@@ -17,7 +39,8 @@ router.get('/alerts', (req, res) => {
   );
 });
  
-router.post('/alerts', (req, res) => {
+router.post('/alerts', async (req, res) => {
+  await ensurePriceAlertsTable;
   const { user_id, coin_symbol, target_price, direction } = req.body;
   if (!user_id || !coin_symbol || !target_price || !direction)
     return res.status(400).json({ message: 'Semua field wajib diisi' });
@@ -34,7 +57,8 @@ router.post('/alerts', (req, res) => {
   );
 });
  
-router.delete('/alerts/:id', (req, res) => {
+router.delete('/alerts/:id', async (req, res) => {
+  await ensurePriceAlertsTable;
   const alertId = parseInt(req.params.id);
   const userId  = parseInt(req.query.user_id);
   if (!alertId || !userId) return res.status(400).json({ message: 'id dan user_id diperlukan' });
@@ -50,7 +74,8 @@ router.delete('/alerts/:id', (req, res) => {
   );
 });
  
-router.get('/alerts/check', (req, res) => {
+router.get('/alerts/check', async (req, res) => {
+  await ensurePriceAlertsTable;
   const userId = parseInt(req.query.user_id);
   if (!userId) return res.status(400).json({ message: 'user_id diperlukan' });
   if (!priceCache.updatedAt) return res.status(503).json({ message: 'Cache harga belum siap' });
@@ -87,7 +112,8 @@ router.get('/alerts/check', (req, res) => {
   );
 });
  
-router.patch('/alerts/:id/triggered', (req, res) => {
+router.patch('/alerts/:id/triggered', async (req, res) => {
+  await ensurePriceAlertsTable;
   const alertId = parseInt(req.params.id);
   const userId  = parseInt(req.body.user_id);
   if (!alertId || !userId) return res.status(400).json({ message: 'id dan user_id diperlukan' });

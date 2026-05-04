@@ -1,6 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 
+// Migrations
+require('./migrations/create_price_alerts_table');
+
 const alertsRoutes = require('./routes/alerts');
 const authRoutes = require('./routes/auth');
 const qrRoutes = require('./routes/qr');

@@ -2,9 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
-import '../feature/settings_screen.dart';
+import '../settings_screen.dart';
 // import '../feature/gamescreen.dart';
-import '../feature/qr_scanner_screen.dart';
+import 'qr_scanner_screen.dart';
 
 class ProfileMenu extends StatefulWidget {
   const ProfileMenu({super.key});

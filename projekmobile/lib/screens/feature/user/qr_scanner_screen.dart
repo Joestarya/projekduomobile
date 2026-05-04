@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 // removed unused imports
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:http/http.dart' as http;
-import '../../service/api_config.dart';
+import '../../../service/api_config.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -62,7 +62,6 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (!mounted) return;
-        // Kembali ke layar sebelumnya (profil) setelah berhasil menyimpan
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

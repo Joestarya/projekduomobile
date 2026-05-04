@@ -7,14 +7,14 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import '../../service/api_config.dart'; // sesuaikan path import kamu
+import '../service/api_config.dart'; // sesuaikan path import kamu
 
 // ─────────────────────────────────────────────
 // MODEL
 // ─────────────────────────────────────────────
 class AiPrediction {
-  final String direction;    // "UP" | "DOWN"
-  final String confidence;   // "HIGH" | "MEDIUM" | "LOW"
+  final String direction; // "UP" | "DOWN"
+  final String confidence; // "HIGH" | "MEDIUM" | "LOW"
   final String reasoning;
   final double currentPrice;
   final DateTime generatedAt;
@@ -28,12 +28,12 @@ class AiPrediction {
   });
 
   factory AiPrediction.fromJson(Map<String, dynamic> json) => AiPrediction(
-        direction: json['direction'] as String,
-        confidence: json['confidence'] as String,
-        reasoning: json['reasoning'] as String,
-        currentPrice: (json['currentPrice'] as num).toDouble(),
-        generatedAt: DateTime.parse(json['generatedAt'] as String),
-      );
+    direction: json['direction'] as String,
+    confidence: json['confidence'] as String,
+    reasoning: json['reasoning'] as String,
+    currentPrice: (json['currentPrice'] as num).toDouble(),
+    generatedAt: DateTime.parse(json['generatedAt'] as String),
+  );
 
   bool get isUp => direction == 'UP';
 
@@ -70,7 +70,11 @@ class AiPredictionCard extends StatefulWidget {
   final String selectedPair;
   final String timeframe;
 
-  const AiPredictionCard({super.key, required this.selectedPair, required this.timeframe});
+  const AiPredictionCard({
+    super.key,
+    required this.selectedPair,
+    required this.timeframe,
+  });
 
   @override
   State<AiPredictionCard> createState() => _AiPredictionCardState();
@@ -99,7 +103,8 @@ class _AiPredictionCardState extends State<AiPredictionCard>
   void didUpdateWidget(AiPredictionCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Reset kalau pair atau timeframe ganti
-    if (oldWidget.selectedPair != widget.selectedPair || oldWidget.timeframe != widget.timeframe) {
+    if (oldWidget.selectedPair != widget.selectedPair ||
+        oldWidget.timeframe != widget.timeframe) {
       setState(() {
         _prediction = null;
         _errorMsg = null;
@@ -128,7 +133,10 @@ class _AiPredictionCardState extends State<AiPredictionCard>
           .post(
             Uri.parse(ApiConfig.endpoint('/crypto/predict')),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'pair': widget.selectedPair, 'timeframe': widget.timeframe}),
+            body: jsonEncode({
+              'pair': widget.selectedPair,
+              'timeframe': widget.timeframe,
+            }),
           )
           .timeout(const Duration(seconds: 15));
 
@@ -162,8 +170,11 @@ class _AiPredictionCardState extends State<AiPredictionCard>
         // ── Header label ──────────────────────
         const Row(
           children: [
-            Icon(Icons.auto_awesome_rounded,
-                size: 12, color: Color(0xFF3A5070)),
+            Icon(
+              Icons.auto_awesome_rounded,
+              size: 12,
+              color: Color(0xFF3A5070),
+            ),
             SizedBox(width: 5),
             Text(
               'AI ANALYSIS',
@@ -199,7 +210,10 @@ class _AiPredictionCardState extends State<AiPredictionCard>
         // ── Disclaimer kecil ──────────────────
         const Text(
           '⚠️  Prediksi AI bukan saran investasi.',
-          style: TextStyle(color: Color.fromARGB(255, 255, 255, 255), fontSize: 10),
+          style: TextStyle(
+            color: Color.fromARGB(255, 255, 255, 255),
+            fontSize: 10,
+          ),
         ),
         const SizedBox(height: 18),
       ],
@@ -238,8 +252,7 @@ class _AiPredictionCardState extends State<AiPredictionCard>
             decoration: BoxDecoration(
               color: const Color(0xFF0F1825),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                  color: const Color(0xFF1A2540), width: 1),
+              border: Border.all(color: const Color(0xFF1A2540), width: 1),
             ),
             child: const Icon(
               Icons.psychology_rounded,
@@ -263,14 +276,16 @@ class _AiPredictionCardState extends State<AiPredictionCard>
                 SizedBox(height: 2),
                 Text(
                   'Analisis harga & momentum terkini',
-                  style: TextStyle(
-                      color: Color(0xFF2A3A5A), fontSize: 11),
+                  style: TextStyle(color: Color(0xFF2A3A5A), fontSize: 11),
                 ),
               ],
             ),
           ),
-          const Icon(Icons.chevron_right_rounded,
-              color: Color(0xFF1A2535), size: 18),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: Color(0xFF1A2535),
+            size: 18,
+          ),
         ],
       ),
     );
@@ -301,8 +316,11 @@ class _AiPredictionCardState extends State<AiPredictionCard>
   Widget _buildErrorContent() {
     return Row(
       children: [
-        const Icon(Icons.error_outline_rounded,
-            color: Color(0xFFEF5350), size: 16),
+        const Icon(
+          Icons.error_outline_rounded,
+          color: Color(0xFFEF5350),
+          size: 16,
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
@@ -317,8 +335,10 @@ class _AiPredictionCardState extends State<AiPredictionCard>
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
-          child: const Text('Retry',
-              style: TextStyle(color: Color(0xFF3A5070), fontSize: 12)),
+          child: const Text(
+            'Retry',
+            style: TextStyle(color: Color(0xFF3A5070), fontSize: 12),
+          ),
         ),
       ],
     );
@@ -339,7 +359,9 @@ class _AiPredictionCardState extends State<AiPredictionCard>
                 color: p.directionColor.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                    color: p.directionColor.withOpacity(0.2), width: 1),
+                  color: p.directionColor.withOpacity(0.2),
+                  width: 1,
+                ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -365,13 +387,14 @@ class _AiPredictionCardState extends State<AiPredictionCard>
             const SizedBox(width: 8),
             // Confidence
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               decoration: BoxDecoration(
                 color: p.confidenceColor.withOpacity(0.06),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                    color: p.confidenceColor.withOpacity(0.15), width: 1),
+                  color: p.confidenceColor.withOpacity(0.15),
+                  width: 1,
+                ),
               ),
               child: Text(
                 'Keyakinan: ${p.confidenceLabel}',
@@ -386,8 +409,11 @@ class _AiPredictionCardState extends State<AiPredictionCard>
             // Refresh button
             GestureDetector(
               onTap: _fetchPrediction,
-              child: const Icon(Icons.refresh_rounded,
-                  color: Color(0xFF1A2535), size: 16),
+              child: const Icon(
+                Icons.refresh_rounded,
+                color: Color(0xFF1A2535),
+                size: 16,
+              ),
             ),
           ],
         ),

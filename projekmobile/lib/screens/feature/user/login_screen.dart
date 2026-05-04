@@ -2,18 +2,17 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../service/api_config.dart';
-import '../../service/biometric_auth_service.dart';
+import '../../../service/api_config.dart';
+import '../../../service/biometric_auth_service.dart';
 import 'register_screen.dart';
-import '../../service/price_alert_service.dart';
-import '../home_screen.dart';
+import '../../../service/price_alert_service.dart';
+import '../../home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
-  
 }
 
 class _LoginScreenState extends State<LoginScreen> {
@@ -171,7 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
           await prefs.setString('full_name', data['user']['full_name'] ?? '');
           PriceAlertService.startPolling((data['user']['id'] ?? '').toString());
         }
-        
+
         await _maybeEnableBiometricAfterLogin();
 
         if (!mounted) return;

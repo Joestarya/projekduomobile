@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dashboard_screen.dart';
+import 'feature/dashboard/dashboard_screen.dart';
 import 'feature/map_screen.dart';
-import 'user/profile_screen.dart';
-import 'feature/gamescreen.dart';
+import 'feature/user/profile_screen.dart';
+import 'feature/game/gamescreen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,21 +33,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       // IndexedStack: semua screen tetap mount di background.
       // GameScreen timer tidak akan cancel saat user pindah tab.
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _widgetOptions,
-      ),
+      body: IndexedStack(index: _selectedIndex, children: _widgetOptions),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         backgroundColor: const Color(0xFF0C0F1A),
         items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard), label: 'Market'),
+          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Market'),
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Lokasi'),
           BottomNavigationBarItem(
-              icon: Icon(Icons.sports_esports), label: 'Game'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.person), label: 'Profil'),
+            icon: Icon(Icons.sports_esports),
+            label: 'Game',
+          ),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.white,

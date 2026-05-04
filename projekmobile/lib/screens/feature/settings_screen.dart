@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../user/login_screen.dart';
+import 'user/login_screen.dart';
 import '../../service/biometric_auth_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -65,63 +65,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         children: [
-          const Text(
-            'Preferences',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF8B9BB4),
+          ListTile(
+            leading: const Icon(
+              Icons.notifications_outlined,
+              color: Color(0xFF638BFF),
             ),
+            title: const Text('Notifikasi'),
+            onTap: () {},
           ),
-          const SizedBox(height: 12),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(
-                    Icons.notifications_outlined,
-                    color: Color(0xFF638BFF),
-                  ),
-                  title: const Text('Notifikasi'),
-                  subtitle: const Text(
-                    'Atur pengingat dan notifikasi aplikasi',
-                    style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12),
-                  ),
-                  onTap: () {},
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(
-                    Icons.lock_outline,
-                    color: Color(0xFF638BFF),
-                  ),
-                  title: const Text('Privasi'),
-                  subtitle: const Text(
-                    'Kelola preferensi privasi akun',
-                    style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12),
-                  ),
-                  onTap: () {},
-                ),
-                if (_canUseBiometric) ...[
-                  const Divider(height: 1),
-                  SwitchListTile(
-                    secondary: const Icon(
-                      Icons.fingerprint,
-                      color: Color(0xFF638BFF),
-                    ),
-                    title: const Text('Login Biometrik'),
-                    subtitle: const Text(
-                      'Gunakan fingerprint / face ID',
-                      style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 12),
-                    ),
-                    value: _biometricEnabled,
-                    onChanged: _toggleBiometric,
-                    activeColor: const Color(0xFF638BFF),
-                  ),
-                ],
-              ],
+          ListTile(
+            leading: const Icon(Icons.lock_outline, color: Color(0xFF638BFF)),
+            title: const Text('Privasi'),
+            onTap: () {},
+          ),
+          if (_canUseBiometric)
+            SwitchListTile(
+              secondary: const Icon(
+                Icons.fingerprint,
+                color: Color(0xFF638BFF),
+              ),
+              title: const Text('Login Biometrik'),
+              value: _biometricEnabled,
+              onChanged: _toggleBiometric,
+              activeColor: const Color(0xFF638BFF),
             ),
-          ),
           const SizedBox(height: 32),
           ElevatedButton.icon(
             onPressed: () => _logout(context),
