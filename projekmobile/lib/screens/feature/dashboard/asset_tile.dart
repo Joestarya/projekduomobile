@@ -88,17 +88,11 @@ class AssetTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      userBalance > 0
-                          ? '${_formatBalance(userBalance)} ${asset.symbol}'
-                          : asset.name,
-                      style: TextStyle(
-                        color: userBalance > 0
-                            ? const Color(0xFF6C63FF)
-                            : const Color(0xFF8B9BB4),
+                      asset.name,
+                      style: const TextStyle(
+                        color: Color(0xFF8B9BB4),
                         fontSize: 12,
-                        fontWeight: userBalance > 0
-                            ? FontWeight.w600
-                            : FontWeight.normal,
+                        fontWeight: FontWeight.normal,
                         overflow: TextOverflow.ellipsis,
                       ),
                       maxLines: 1,

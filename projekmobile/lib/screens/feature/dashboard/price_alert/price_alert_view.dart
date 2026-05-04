@@ -199,7 +199,7 @@ class _PriceAlertViewState extends State<PriceAlertView> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: controller.setPercentText,
             decoration: InputDecoration(
-              hintText: 'Contoh 2.5',
+              hintText: 'Masukkan Presentase (%)',
               suffixText: '%',
               filled: true,
               fillColor: AppTheme.surfaceHigh,
