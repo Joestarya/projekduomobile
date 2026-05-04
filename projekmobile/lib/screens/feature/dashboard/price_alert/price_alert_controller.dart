@@ -106,8 +106,9 @@ class PriceAlertController extends ChangeNotifier {
         alerts
           ..clear()
           ..addAll(
-            (data['alerts'] as List)
-                .map((item) => PriceAlertItem.fromJson(item as Map<String, dynamic>)),
+            (data['alerts'] as List).map(
+              (item) => PriceAlertItem.fromJson(item as Map<String, dynamic>),
+            ),
           );
       }
     } catch (_) {

@@ -1,39 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 import '../../../theme/app_theme.dart';
-
-// ─────────────────────────────────────────────
-//  DATA MODEL
-// ─────────────────────────────────────────────
-enum NodeType { atm, bank, other }
-
-class AtmNode {
-  final String id;
-  final LatLng position;
-  final String label;
-  final NodeType type;
-  final Map<String, String> tags;
-
-  const AtmNode({
-    required this.id,
-    required this.position,
-    required this.label,
-    required this.type,
-    required this.tags,
-  });
-
-  String get bankName =>
-      tags['operator'] ?? tags['name'] ?? tags['brand'] ?? '';
-
-  String get address => tags['addr:street'] ?? tags['addr:full'] ?? '';
-}
+import 'map_models.dart';
+import 'map_service.dart';
 
 // ─────────────────────────────────────────────
 //  SCREEN
@@ -67,15 +41,13 @@ class _AtmFinderScreenState extends State<AtmFinderScreen>
   // Live tracking
   StreamSubscription<Position>? _locationSub;
   LatLng? _lastFetchedLoc;
-  static const double _refetchThreshold = 150;
 
   // Animation
   late AnimationController _pulseCtrl;
   late AnimationController _slideCtrl;
   late Animation<double> _slideAnim;
 
-  //route
-
+  // Route
   List<LatLng> _routePoints = [];
   bool _isRouting = false;
   String? _routeInfo;
@@ -83,6 +55,7 @@ class _AtmFinderScreenState extends State<AtmFinderScreen>
   // Bottom sheet
   bool _showBottomSheet = false;
 
+  // ── LIFECYCLE ─────────────────────────────
   @override
   void initState() {
     super.initState();
@@ -125,76 +98,14 @@ class _AtmFinderScreenState extends State<AtmFinderScreen>
     if (mounted) setState(() => _isLoading = false);
   }
 
-  // ── FETCH ROUTE (OSRM API) ────────────────
-  Future<void> _fetchRoute(LatLng destination) async {
-    if (_myLocation == null) return;
-
-    setState(() {
-      _isRouting = true;
-      _routePoints = [];
-      _routeInfo = null;
-    });
-
-    final start = _myLocation!;
-    // Format OSRM: longitude,latitude
-    final url = Uri.parse(
-      'https://router.project-osrm.org/route/v1/driving/'
-      '${start.longitude},${start.latitude};'
-      '${destination.longitude},${destination.latitude}'
-      '?geometries=geojson&overview=full',
-    );
-
-    try {
-      final res = await http.get(url).timeout(const Duration(seconds: 15));
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        if (data['code'] == 'Ok') {
-          final route = data['routes'][0];
-          final geometry = route['geometry']['coordinates'] as List;
-
-          // OSRM mengembalikan [longitude, latitude], latlong2 butuh (latitude, longitude)
-          final points = geometry
-              .map((coord) => LatLng(coord[1], coord[0]))
-              .toList();
-
-          final distance = route['distance'] as num; // dalam meter
-          final duration = route['duration'] as num; // dalam detik
-
-          setState(() {
-            _routePoints = points;
-            _routeInfo =
-                '${(distance / 1000).toStringAsFixed(1)} km • ${(duration / 60).toStringAsFixed(0)} mnt';
-          });
-        }
-      }
-    } catch (e) {
-      _setError('Gagal memuat rute navigasi.');
-    } finally {
-      if (mounted) setState(() => _isRouting = false);
-    }
-  }
-
   // ── LOCATION ──────────────────────────────
   Future<LatLng?> _getLocation() async {
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        _setError('GPS tidak aktif. Nyalakan lokasi terlebih dahulu.');
+      final loc = await MapService.getLocation();
+      if (loc == null) {
+        _setError('Gagal mendapatkan lokasi atau izin ditolak.');
         return null;
       }
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
-        _setError('Izin lokasi ditolak. Buka Pengaturan untuk mengaktifkan.');
-        return null;
-      }
-
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.bestForNavigation,
-      );
-      final loc = LatLng(pos.latitude, pos.longitude);
       if (mounted) {
         setState(() => _myLocation = loc);
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -226,9 +137,10 @@ class _AtmFinderScreenState extends State<AtmFinderScreen>
               _lastFetchedLoc!,
               newLoc,
             );
-            if (dist >= _refetchThreshold) await _fetchNodes(newLoc);
+            if (dist >= MapService.refetchThreshold) await _fetchNodes(newLoc);
           }
         });
+    if (mounted) setState(() {}); // Refresh indikator live (titik hijau)
   }
 
   // ── FETCH ATM DATA ─────────────────────────
@@ -239,90 +151,23 @@ class _AtmFinderScreenState extends State<AtmFinderScreen>
       _errorMsg = null;
     });
 
-    final r = _radius.toInt();
-    final lat = loc.latitude;
-    final lon = loc.longitude;
-
-    // Query komprehensif: ATM + Bank + nama/operator bank Indonesia
-    final query =
-        '''
-[out:json][timeout:30];
-(
-  node["amenity"="atm"](around:$r,$lat,$lon);
-  way["amenity"="atm"](around:$r,$lat,$lon);
-  node["amenity"="bank"](around:$r,$lat,$lon);
-  way["amenity"="bank"](around:$r,$lat,$lon);
-  node["name"~"ATM",i](around:$r,$lat,$lon);
-  node["operator"~"BCA|BRI|Mandiri|BNI|CIMB|Danamon|BTN|Permata|Maybank|OCBC|BSI|Panin|Mega",i](around:$r,$lat,$lon);
-);
-out center tags;
-''';
-
-    final url = Uri.parse(
-      'https://overpass-api.de/api/interpreter?data=${Uri.encodeComponent(query)}',
-    );
-
     try {
-      final res = await http
-          .get(url, headers: {'User-Agent': 'ATMFinderApp/2.0'})
-          .timeout(const Duration(seconds: 35));
-
+      final nodes = await MapService.fetchNodes(loc, _radius);
       if (!mounted) return;
-      if (res.statusCode != 200) {
-        _setError('Server error (${res.statusCode}). Coba lagi.');
-        return;
-      }
-
-      final data = json.decode(res.body) as Map<String, dynamic>;
-      final elements = data['elements'] as List;
-      final seen = <String>{};
-      final nodes = <AtmNode>[];
-
-      for (final el in elements) {
-        final double? elLat = el['type'] == 'way'
-            ? (el['center']?['lat'] as num?)?.toDouble()
-            : (el['lat'] as num?)?.toDouble();
-        final double? elLon = el['type'] == 'way'
-            ? (el['center']?['lon'] as num?)?.toDouble()
-            : (el['lon'] as num?)?.toDouble();
-        if (elLat == null || elLon == null) continue;
-
-        final key = '${elLat.toStringAsFixed(5)}_${elLon.toStringAsFixed(5)}';
-        if (seen.contains(key)) continue;
-        seen.add(key);
-
-        final tags = (el['tags'] as Map?)?.cast<String, String>() ?? {};
-        final amenity = tags['amenity'] ?? '';
-        final id = '${el['type']}_${el['id']}';
-
-        NodeType type;
-        String label;
-
-        if (amenity == 'atm') {
-          type = NodeType.atm;
-          label = tags['operator'] ?? tags['name'] ?? tags['brand'] ?? 'ATM';
-        } else if (amenity == 'bank') {
-          type = NodeType.bank;
-          label = tags['name'] ?? tags['operator'] ?? 'Bank';
-        } else {
-          type = NodeType.other;
-          label = tags['name'] ?? tags['operator'] ?? 'ATM';
-        }
-
-        nodes.add(
-          AtmNode(
-            id: id,
-            position: LatLng(elLat, elLon),
-            label: label,
-            type: type,
-            tags: tags,
-          ),
-        );
-      }
 
       setState(() {
         _nodes = nodes;
         _lastFetchedLoc = loc;
+
+        // Reset selected node jika sudah tidak ada di hasil baru
+        if (_selectedNode != null &&
+            !nodes.any((n) => n.id == _selectedNode!.id)) {
+          _selectedNode = null;
+          _showBottomSheet = false;
+          _routePoints = [];
+          _routeInfo = null;
+        }
+
         if (nodes.isEmpty) {
           _errorMsg =
               'Tidak ada ATM/Bank ditemukan dalam radius ${_radius.toInt()}m.\nCoba perbesar radius scan.';
@@ -332,6 +177,31 @@ out center tags;
       if (mounted) _setError('Koneksi bermasalah. Periksa internet kamu.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ── FETCH ROUTE ───────────────────────────
+  Future<void> _fetchRoute(LatLng destination) async {
+    if (_myLocation == null) return;
+
+    setState(() {
+      _isRouting = true;
+      _routePoints = [];
+      _routeInfo = null;
+    });
+
+    try {
+      final result = await MapService.fetchRoute(_myLocation!, destination);
+      if (result != null && mounted) {
+        setState(() {
+          _routePoints = result.points;
+          _routeInfo = result.info;
+        });
+      }
+    } catch (e) {
+      _setError('Gagal memuat rute navigasi.');
+    } finally {
+      if (mounted) setState(() => _isRouting = false);
     }
   }
 
@@ -356,7 +226,7 @@ out center tags;
     setState(() {
       _selectedNode = node;
       _showBottomSheet = true;
-      _routePoints = []; //reset route
+      _routePoints = [];
       _routeInfo = null;
     });
     _slideCtrl.forward(from: 0);
@@ -370,7 +240,7 @@ out center tags;
           _showBottomSheet = false;
           _selectedNode = null;
         });
-      _routePoints = []; // Reset rute
+      _routePoints = [];
       _routeInfo = null;
     });
   }
@@ -400,41 +270,6 @@ out center tags;
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: AppTheme.textMuted, size: 13),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: AppTheme.textDim,
-                    fontSize: 10,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ── MAP ───────────────────────────────────
   Widget _buildMap() {
     final filtered = _filteredNodes;
@@ -446,7 +281,6 @@ out center tags;
         onTap: (_, __) => _closeBottomSheet(),
       ),
       children: [
-        // OSM Standard tiles — gratis, no API key
         TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           userAgentPackageName: 'com.atmfinder.app',
@@ -468,20 +302,21 @@ out center tags;
             ],
           ),
 
-        // ATM / Bank markers
-        // Route Polyline (Tambahkan bagian ini)
+        // Route polyline
         PolylineLayer(
           polylines: [
             if (_routePoints.isNotEmpty)
               Polyline(
                 points: _routePoints,
-                color: AppTheme.accentSoft, // Warna garis rute
-                strokeWidth: 4.5, // Ketebalan garis
+                color: AppTheme.accentSoft,
+                strokeWidth: 4.5,
                 borderColor: AppTheme.accent,
                 borderStrokeWidth: 1.5,
               ),
           ],
         ),
+
+        // ATM / Bank markers + user location
         MarkerLayer(
           markers: [
             ...filtered.map(
@@ -495,8 +330,6 @@ out center tags;
                 ),
               ),
             ),
-
-            // User location
             if (_myLocation != null)
               Marker(
                 point: _myLocation!,
@@ -565,9 +398,7 @@ out center tags;
               ],
             ),
           ),
-          // Stem
           Container(width: 2, height: 6, color: color.withOpacity(0.6)),
-          // Dot
           Container(
             width: 8,
             height: 8,
@@ -634,7 +465,7 @@ out center tags;
     );
   }
 
-  // ── TOP HUD (lebih compact) ──────────────────
+  // ── TOP HUD ───────────────────────────────
   Widget _buildTopHUD() {
     final filtered = _filteredNodes;
     final atmCount = filtered.where((n) => n.type != NodeType.bank).length;
@@ -727,7 +558,7 @@ out center tags;
     );
   }
 
-  // ── RADIUS PANEL (collapsible) ────────────────
+  // ── RADIUS PANEL ──────────────────────────
   Widget _buildRadiusPanel() {
     return Positioned(
       top: MediaQuery.of(context).padding.top + 62,
@@ -738,7 +569,6 @@ out center tags;
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // ── Tap row untuk expand/collapse ──
             GestureDetector(
               onTap: () =>
                   setState(() => _radiusPanelExpanded = !_radiusPanelExpanded),
@@ -786,8 +616,6 @@ out center tags;
                 ],
               ),
             ),
-
-            // ── Slider (hanya muncul kalau expanded) ──
             if (_radiusPanelExpanded) ...[
               const SizedBox(height: 8),
               SliderTheme(
@@ -874,7 +702,7 @@ out center tags;
     );
   }
 
-  // ── NODE DETAIL SHEET (compact + scroll) ──────
+  // ── NODE DETAIL SHEET ─────────────────────
   Widget _buildNodeSheet(AtmNode node) {
     final color = node.type == NodeType.bank
         ? AppTheme.bankColor
@@ -1054,7 +882,42 @@ out center tags;
     );
   }
 
-  // ── BOTTOM CONTROLS (lebih compact) ──────────
+  Widget _infoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: AppTheme.textMuted, size: 13),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppTheme.textDim,
+                    fontSize: 10,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── BOTTOM CONTROLS ───────────────────────
   Widget _buildBottomControls() {
     return Positioned(
       bottom: 20,
@@ -1185,9 +1048,9 @@ out center tags;
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
+              const Text(
                 'Mencari ATM terdekat...',
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppTheme.textPrimary,
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -1199,9 +1062,6 @@ out center tags;
       ),
     );
   }
-
-  // ── ERROR SNACKBAR ─────────────────────────
-  // Error ditampilkan via error state di HUD, bukan snackbar
 
   // ── GLASS CONTAINER ───────────────────────
   Widget _glass({required Widget child, EdgeInsets? padding}) {

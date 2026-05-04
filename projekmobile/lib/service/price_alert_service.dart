@@ -12,14 +12,14 @@ class PriceAlertService {
   static String? _userId;
   static bool _initialized = false;
 
-  // ── Init sekali saat app start ──────────────────────────
+  // ── Init ──────────────────────────
   static Future<void> init() async {
     if (_initialized) return;
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     await _notif.initialize(const InitializationSettings(android: androidSettings));
 
-    // Minta izin notif Android 13+
+    // Minta izin notif 
     await _notif
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
@@ -32,7 +32,7 @@ class PriceAlertService {
     _userId = userId;
     _timer?.cancel();
     _checkAlerts(); // langsung cek sekali
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) => _checkAlerts());
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _checkAlerts());
   }
 
   // ── Stop polling saat logout ────────────────────────────
@@ -60,7 +60,6 @@ class PriceAlertService {
         await _markTriggered(alert['id'] as int);
       }
     } catch (_) {
-      // Silent — tidak mengganggu UI
     }
   }
 

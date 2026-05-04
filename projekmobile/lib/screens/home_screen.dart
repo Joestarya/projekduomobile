@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'feature/dashboard/dashboard_screen.dart';
-import 'feature/map_screen.dart';
+import 'feature/map/map_screen.dart';
 import 'feature/user/profile_screen.dart';
 import 'feature/game/gamescreen.dart';
 

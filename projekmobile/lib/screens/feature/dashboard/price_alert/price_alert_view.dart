@@ -126,139 +126,81 @@ class _PriceAlertViewState extends State<PriceAlertView> {
   }
 
   Widget _buildForm() {
-    final livePrice = controller.selectedLivePrice;
-    final targetPrice = controller.targetPrice;
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.notifications_active_outlined, size: 18, color: AppTheme.accent),
-              const SizedBox(width: 8),
-              Text(
-                'Buat alert baru',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+          _buildFieldLabel('Coin'),
+          const SizedBox(height: 6),
+          DropdownButton<int>(
+            value: controller.selectedCoinIndex,
+            dropdownColor: AppTheme.surfaceHigh,
+            underline: const SizedBox.shrink(),
+            items: List.generate(PriceAlertController.coins.length, (index) {
+              final coin = PriceAlertController.coins[index];
+              return DropdownMenuItem(
+                value: index,
+                child: Text('${coin.emoji} ${coin.symbol}'),
+              );
+            }),
+            onChanged: (value) => controller.selectCoin(value ?? 0),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildFieldLabel('Coin'),
-              ),
-              DropdownButton<int>(
-                value: controller.selectedCoinIndex,
-                dropdownColor: AppTheme.surfaceHigh,
-                underline: const SizedBox.shrink(),
-                items: List.generate(
-                  PriceAlertController.coins.length,
-                  (index) {
-                    final coin = PriceAlertController.coins[index];
-                    return DropdownMenuItem(
-                      value: index,
-                      child: Text('${coin.emoji} ${coin.symbol}'),
-                    );
-                  },
-                ),
-                onChanged: (value) => controller.selectCoin(value ?? 0),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(child: _buildFieldLabel('Arah')),
-            ],
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          _buildFieldLabel('Arah'),
+          const SizedBox(height: 6),
           SegmentedButton<String>(
             segments: const [
               ButtonSegment<String>(value: 'up', label: Text('Naik')),
               ButtonSegment<String>(value: 'down', label: Text('Turun')),
             ],
             selected: <String>{controller.direction},
-            onSelectionChanged: (selection) => controller.setDirection(selection.first),
+            onSelectionChanged: (selection) =>
+                controller.setDirection(selection.first),
           ),
-          const SizedBox(height: 14),
-          _buildFieldLabel('Custom %'),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          _buildFieldLabel('Persenan (%)'),
+          const SizedBox(height: 6),
           TextField(
             controller: _percentController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: controller.setPercentText,
             decoration: InputDecoration(
-              hintText: 'Masukkan Presentase (%)',
+              hintText: 'Masukkan %',
               suffixText: '%',
               filled: true,
               fillColor: AppTheme.surfaceHigh,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: PriceAlertController.quickPercents.map((percent) {
-              final selected = controller.percentValue == percent;
-              return ChoiceChip(
-                label: Text('${percent.toStringAsFixed(0)}%'),
-                selected: selected,
-                onSelected: (_) {
-                  controller.useQuickPercent(percent.toDouble());
-                  _syncInput();
-                },
-                backgroundColor: AppTheme.surfaceHigh,
-                selectedColor: AppTheme.accent,
-                labelStyle: TextStyle(
-                  color: selected ? AppTheme.bg : AppTheme.textPrimary,
-                  fontSize: 12,
-                ),
-              );
-            }).toList(),
-          ),
-          if (livePrice != null) ...[
-            const SizedBox(height: 16),
-            _buildPreviewRow('Live', '\$${controller.formatPrice(livePrice)}'),
-          ],
-          if (targetPrice != null) ...[
-            const SizedBox(height: 8),
-            _buildPreviewRow('Target', '\$${controller.formatPrice(targetPrice)}', accent: true),
-          ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.accent,
                 disabledBackgroundColor: AppTheme.textDim,
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 11),
               ),
               onPressed: controller.canSubmit ? _submit : null,
               child: controller.isSubmitting
                   ? const SizedBox(
-                      height: 18,
-                      width: 18,
+                      height: 16,
+                      width: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text(
-                      'Set Alert',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                  : const Text('Set Alert'),
             ),
           ),
         ],
@@ -267,57 +209,31 @@ class _PriceAlertViewState extends State<PriceAlertView> {
   }
 
   Widget _buildAlertTile(PriceAlertItem alert) {
-    final livePrice = controller.livePrices[alert.coinSymbol];
-    final distanceText = livePrice == null || livePrice == 0
-        ? '—'
-        : '${(((alert.targetPrice - livePrice) / livePrice) * 100).toStringAsFixed(1)}%';
-
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceHigh,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              alert.direction == 'up' ? Icons.trending_up : Icons.trending_down,
-              color: alert.direction == 'up' ? AppTheme.bullish : AppTheme.bearish,
-            ),
-          ),
-          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${alert.coinSymbol} • ${alert.direction == 'up' ? 'Naik' : 'Turun'}',
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Target \$${controller.formatPrice(alert.targetPrice)} • Selisih $distanceText',
-                  style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
-                ),
-              ],
+            child: Text(
+              '${alert.coinSymbol} ${alert.direction == 'up' ? '↑' : '↓'} \$${controller.formatPrice(alert.targetPrice)}',
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
             ),
           ),
           IconButton(
             onPressed: () => _delete(alert.id),
-            icon: const Icon(Icons.close),
+            icon: const Icon(Icons.close, size: 16),
             color: AppTheme.bearish,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
           ),
         ],
       ),
@@ -331,29 +247,6 @@ class _PriceAlertViewState extends State<PriceAlertView> {
         color: AppTheme.textMuted,
         fontSize: 12,
         fontWeight: FontWeight.w500,
-      ),
-    );
-  }
-
-  Widget _buildPreviewRow(String label, String value, {bool accent = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceHigh,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-          Text(
-            value,
-            style: TextStyle(
-              color: accent ? AppTheme.accent : AppTheme.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }
