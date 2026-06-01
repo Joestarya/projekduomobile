@@ -5,10 +5,10 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : '';
 
-console.log("Key Terbaca:", GEMINI_API_KEY ? "Ya" : "Tidak");
+console.log('Key Terbaca:', GEMINI_API_KEY ? 'Ya' : 'Tidak');
 if (GEMINI_API_KEY) {
-    console.log("Panjang Key:", GEMINI_API_KEY.length);
-    console.log("Karakter Pertama:", GEMINI_API_KEY[0]);
+    console.log('Panjang Key:', GEMINI_API_KEY.length);
+    console.log('Karakter Pertama:', GEMINI_API_KEY[0]);
 }
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
@@ -36,5 +36,5 @@ module.exports = {
     GEMINI_API_KEY,
     genAI,
     BINANCE_BASE_URLS,
-    SECRET_KEY
+    SECRET_KEY,
 };

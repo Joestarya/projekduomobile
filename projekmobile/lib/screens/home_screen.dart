@@ -36,7 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: IndexedStack(index: _selectedIndex, children: _widgetOptions),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
-        backgroundColor: const Color(0xFF0C0F1A),
+        backgroundColor: const Color(0xFF0C0F1A), // Warna background bottom navbar
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Market'),
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Lokasi'),
@@ -47,8 +47,8 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
         currentIndex: _selectedIndex,
-        selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.white54,
+        selectedItemColor: Colors.white, // Warna ikon menu yang aktif
+        unselectedItemColor: Colors.white54, // Warna ikon menu yang tidak aktif
         onTap: _onItemTapped,
       ),
     );

@@ -678,7 +678,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2A3A5E),
+                  color: const Color(0xFF2A3A5E), // Warna garis handle bottom sheet
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -811,7 +811,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(color: Color(0xFF6C63FF), strokeWidth: 2),
+            CircularProgressIndicator(color: Color(0xFF6C63FF), strokeWidth: 2), // Warna loading spinner
             SizedBox(height: 16),
             Text(
               'Mengambil data pasar...',
@@ -1203,8 +1203,8 @@ class _OrderBottomSheetState extends State<_OrderBottomSheet> {
               onPressed: _isSubmitting ? null : _submitOrder,
               style: ElevatedButton.styleFrom(
                 backgroundColor: isBuy
-                    ? const Color(0xFF00E676)
-                    : const Color(0xFFFF5252),
+                    ? const Color(0xFF00E676) // Warna tombol beli
+                    : const Color(0xFFFF5252), // Warna tombol jual
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),

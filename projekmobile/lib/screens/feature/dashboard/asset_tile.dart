@@ -23,11 +23,11 @@ class AssetTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUp = asset.changePercent >= 0;
-    final priceColor = isUp ? const Color(0xFF00E676) : const Color(0xFFFF5252);
+    final priceColor = isUp ? const Color(0xFF00E676) /* Warna harga naik (hijau) */ : const Color(0xFFFF5252); /* Warna harga turun (merah) */
 
     final hasChart = sparkData != null && sparkData!.length > 2;
 
-    return InkWell(
+    return InkWell( 
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
@@ -49,14 +49,14 @@ class AssetTile extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6C63FF).withOpacity(0.15),
+                  color: const Color(0xFF6C63FF).withOpacity(0.15), // Warna background avatar logo koin
                   borderRadius: BorderRadius.circular(20),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   asset.symbol.length > 2 ? asset.symbol[0] : asset.symbol,
                   style: const TextStyle(
-                    color: Color(0xFF9D97FF),
+                    color: Color(0xFF9D97FF), // Warna teks inisial logo koin
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
                   ),
@@ -73,7 +73,7 @@ class AssetTile extends StatelessWidget {
                     Text(
                       asset.symbol,
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: Colors.white, // Warna teks simbol koin
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
                       ),
@@ -82,7 +82,7 @@ class AssetTile extends StatelessWidget {
                     Text(
                       asset.name,
                       style: const TextStyle(
-                        color: Color(0xFF8B9BB4),
+                        color: Color(0xFF8B9BB4), // Warna teks nama koin
                         fontSize: 12,
                         fontWeight: FontWeight.normal,
                         overflow: TextOverflow.ellipsis,
@@ -144,8 +144,8 @@ class AssetTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: isUp
-                            ? const Color(0xFF00E676)//warnapercent
-                            : const Color(0xFFFF5252),
+                            ? const Color(0xFF00E676) // Warna persentase naik
+                            : const Color(0xFFFF5252), // Warna persentase turun
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -170,7 +170,7 @@ class AssetTile extends StatelessWidget {
   Widget _buildLoadingChart(bool isUp) {
     return Center(
       child: LinearProgressIndicator(
-        backgroundColor: const Color(0xFF1A2035),
+        backgroundColor: const Color(0xFF1A2035), // Warna background loading chart
         valueColor: AlwaysStoppedAnimation<Color>(
           isUp
               ? const Color(0xFF00E676).withOpacity(0.25)

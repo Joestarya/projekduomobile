@@ -84,19 +84,16 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Widget _buildStats() {
+    final scoreText = _controller.scoreLoaded
+        ? _controller.totalScore.toString()
+        : '...';
     return Card(
       color: AppTheme.surface,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _statItem(
-              'Score',
-              _controller.totalScore.toString(),
-              Colors.yellow,
-            ),
-          ],
+          children: [_statItem('Total Score', scoreText, Colors.yellow)],
         ),
       ),
     );

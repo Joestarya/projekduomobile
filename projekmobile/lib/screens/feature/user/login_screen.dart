@@ -234,14 +234,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: Colors.white, // Warna teks judul Welcome Back
                 ),
               ),
               const SizedBox(height: 8),
               const Text(
                 'Login to continue',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Color(0xFF8B9BB4)),
+                style: TextStyle(fontSize: 14, color: Color(0xFF8B9BB4)), // Warna teks subtitle
               ),
               const SizedBox(height: 40),
               TextField(
@@ -250,7 +250,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   labelText: 'Email',
                   prefixIcon: Icon(
                     Icons.email_outlined,
-                    color: Color(0xFF8B9BB4),
+                    color: Color(0xFF8B9BB4), // Warna ikon email
                   ),
                 ),
               ),
@@ -262,7 +262,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   labelText: 'Password',
                   prefixIcon: Icon(
                     Icons.lock_outline,
-                    color: Color(0xFF8B9BB4),
+                    color: Color(0xFF8B9BB4), // Warna ikon password
                   ),
                 ),
               ),
@@ -288,8 +288,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         icon: const Icon(Icons.fingerprint),
                         label: const Text('Login dengan Biometrik'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF638BFF),
-                          side: const BorderSide(color: Color(0xFF638BFF)),
+                          foregroundColor: const Color(0xFF638BFF), // Warna teks & ikon tombol biometrik
+                          side: const BorderSide(color: Color(0xFF638BFF)), // Warna border tombol biometrik
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -309,7 +309,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
                 child: const Text(
                   'Belum punya akun? Daftar',
-                  style: TextStyle(color: Color(0xFF638BFF)),
+                  style: TextStyle(color: Color(0xFF638BFF)), // Warna teks link daftar
                 ),
               ),
             ],

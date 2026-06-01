@@ -95,14 +95,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: Colors.white, // Warna teks judul Create Account
                 ),
               ),
               const SizedBox(height: 8),
               const Text(
                 'Sign up to get started',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Color(0xFF8B9BB4)),
+                style: TextStyle(fontSize: 14, color: Color(0xFF8B9BB4)), // Warna teks subtitle
               ),
               const SizedBox(height: 40),
               TextField(
@@ -111,7 +111,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   labelText: 'Nama Lengkap',
                   prefixIcon: Icon(
                     Icons.person_outline,
-                    color: Color(0xFF8B9BB4),
+                    color: Color(0xFF8B9BB4), // Warna ikon nama lengkap
                   ),
                 ),
               ),
@@ -122,7 +122,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   labelText: 'Email',
                   prefixIcon: Icon(
                     Icons.email_outlined,
-                    color: Color(0xFF8B9BB4),
+                    color: Color(0xFF8B9BB4), // Warna ikon email
                   ),
                 ),
               ),
@@ -134,7 +134,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   labelText: 'Password',
                   prefixIcon: Icon(
                     Icons.lock_outline,
-                    color: Color(0xFF8B9BB4),
+                    color: Color(0xFF8B9BB4), // Warna ikon password
                   ),
                 ),
               ),
@@ -158,7 +158,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 },
                 child: const Text(
                   'Sudah punya akun? Login',
-                  style: TextStyle(color: Color(0xFF638BFF)),
+                  style: TextStyle(color: Color(0xFF638BFF)), // Warna teks link login
                 ),
               ),
             ],

@@ -3,6 +3,7 @@ const cors = require('cors');
 
 // Migrations
 require('./migrations/create_price_alerts_table');
+require('./migrations/add_users_totalscore_column');
 
 const alertsRoutes = require('./routes/alerts');
 const authRoutes = require('./routes/auth');

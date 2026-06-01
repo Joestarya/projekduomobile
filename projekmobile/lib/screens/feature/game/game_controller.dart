@@ -69,13 +69,13 @@ class GameController extends ChangeNotifier {
   }
 
   Future<void> _loadScore() async {
-    final prefs = await SharedPreferences.getInstance();
-    totalScore = prefs.getInt('game_total_score') ?? 0;
-    notifyListeners();
-
     try {
       final token = await _getToken();
-      if (token == null) return;
+      if (token == null) {
+        scoreLoaded = true;
+        return;
+      }
+
       final resp = await http
           .get(
             Uri.parse(ApiConfig.endpoint('/game/score')),
@@ -85,20 +85,11 @@ class GameController extends ChangeNotifier {
 
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        totalScore = max(
-          totalScore,
-          (data['total_score'] as num?)?.toInt() ?? 0,
-        );
-        await _saveScoreLocal();
+        totalScore = (data['total_score'] as num?)?.toInt() ?? 0;
         notifyListeners();
       }
     } catch (_) {}
     scoreLoaded = true;
-  }
-
-  Future<void> _saveScoreLocal() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('game_total_score', totalScore);
   }
 
   Future<void> _syncScoreToServer() async {
@@ -138,40 +129,37 @@ class GameController extends ChangeNotifier {
   }
 
   Future<void> _fetchCandles() async {
-    final urls = [
-      ApiConfig.endpoint(
-        '/crypto/klines?symbol=$selectedPair&interval=1m&limit=60',
-      ),
-      'https://api.binance.com/api/v3/klines?symbol=$selectedPair&interval=1m&limit=60',
-    ];
-    for (final url in urls) {
-      try {
-        final resp = await http
-            .get(Uri.parse(url))
-            .timeout(const Duration(seconds: 6));
-        if (resp.statusCode != 200) continue;
-        final body = jsonDecode(resp.body);
-        final List raw = body is Map ? (body['data'] ?? []) : body;
-        candles = raw.map<Map<String, double>>((k) {
-          if (k is Map) {
-            return {
-              'open': (k['open'] as num).toDouble(),
-              'high': (k['high'] as num).toDouble(),
-              'low': (k['low'] as num).toDouble(),
-              'close': (k['close'] as num).toDouble(),
-            };
-          }
+    try {
+      final resp = await http
+          .get(
+            Uri.parse(
+              ApiConfig.endpoint(
+                '/crypto/klines?symbol=$selectedPair&interval=1m&limit=60',
+              ),
+            ),
+          )
+          .timeout(const Duration(seconds: 6));
+      if (resp.statusCode != 200) return;
+      final body = jsonDecode(resp.body) as Map<String, dynamic>;
+      final List raw = (body['data'] as List?) ?? [];
+      candles = raw.map<Map<String, double>>((k) {
+        if (k is Map) {
           return {
-            'open': double.parse(k[1].toString()),
-            'high': double.parse(k[2].toString()),
-            'low': double.parse(k[3].toString()),
-            'close': double.parse(k[4].toString()),
+            'open': (k['open'] as num).toDouble(),
+            'high': (k['high'] as num).toDouble(),
+            'low': (k['low'] as num).toDouble(),
+            'close': (k['close'] as num).toDouble(),
           };
-        }).toList();
-        notifyListeners();
-        return;
-      } catch (_) {}
-    }
+        }
+        return {
+          'open': double.parse(k[1].toString()),
+          'high': double.parse(k[2].toString()),
+          'low': double.parse(k[3].toString()),
+          'close': double.parse(k[4].toString()),
+        };
+      }).toList();
+      notifyListeners();
+    } catch (_) {}
   }
 
   void startRound(Prediction pred) {
@@ -228,7 +216,6 @@ class GameController extends ChangeNotifier {
     if (history.length > 20) history.removeLast();
     notifyListeners();
 
-    await _saveScoreLocal();
     _syncScoreToServer();
     await _fetchCandles();
   }

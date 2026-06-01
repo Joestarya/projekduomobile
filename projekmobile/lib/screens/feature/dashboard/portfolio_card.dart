@@ -36,7 +36,7 @@ class PortfolioCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 5, 20, 60),//warna portofolio
+        color: const Color.fromARGB(255, 5, 20, 60), // Warna background card portofolio
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -47,13 +47,13 @@ class PortfolioCard extends StatelessWidget {
             children: [
               const Text(
                 'Total Portofolio',
-                style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 13),
+                style: TextStyle(color: Color(0xFF8B9BB4), fontSize: 13), // Warna teks 'Total Portofolio'
               ),
               GestureDetector(
                 onTap: onTogglePrivacy,
                 child: Icon(
                   isPrivacyMode ? Icons.visibility_off : Icons.visibility,
-                  color: const Color(0xFF8B9BB4),//W
+                  color: const Color(0xFF8B9BB4), // Warna ikon mata (visibility)
                   size: 18,
                 ),
               ),
@@ -71,7 +71,7 @@ class PortfolioCard extends StatelessWidget {
                                 ? (eurRate != null ? formatEur(totalBalance * eurRate!) : 'Menghitung...')
                                 : formatUsd(totalBalance)))),
             style: const TextStyle(
-              color: Colors.white,
+              color: Colors.white, // Warna teks saldo portofolio
               fontSize: 28,
               fontWeight: FontWeight.w800,
             ),
@@ -113,12 +113,12 @@ class PortfolioCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withOpacity(0.05), // Warna background badge tiap aset
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         '$symbol: $displayValue',
-        style: const TextStyle(color: Colors.white, fontSize: 11),
+        style: const TextStyle(color: Colors.white, fontSize: 11), // Warna teks aset
       ),
     );
   }
