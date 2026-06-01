@@ -15,10 +15,11 @@ class SparklinePainter extends CustomPainter {
     final maxVal = data.reduce(max);
     final range = (maxVal - minVal).abs();
     if (range == 0) return;
-
+    //warna chart
     final upColor = const Color(0xFF00E676);
     final downColor = const Color(0xFFFF5252);
     final lineColor = isUp ? upColor : downColor;
+    //warna fill chart
     final fillColor = isUp
         ? const Color(0xFF00E676).withOpacity(0.15)
         : const Color(0xFFFF5252).withOpacity(0.15);

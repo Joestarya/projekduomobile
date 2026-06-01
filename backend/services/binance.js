@@ -95,6 +95,7 @@ async function refreshPriceCache() {
     ];
 
     try {
+        //timeframe
         const [tickerData] = await Promise.all([
             fetchBinance(`/ticker/24hr?symbols=${JSON.stringify(ASSETS.map((a) => a.symbol))}`),
         ]);
@@ -108,7 +109,7 @@ async function refreshPriceCache() {
                 return {
                     name: meta.name,
                     symbol: meta.short,
-                    pair: t.symbol,
+                    pair: t.symbol, 
                     price: parseFloat(t.lastPrice),
                     changePercent: parseFloat(t.priceChangePercent),
                     high24h: parseFloat(t.highPrice),

@@ -16,5 +16,4 @@ connection.connect((err) => {
   console.log('Terhubung ke database SQL sebagai id ' + connection.threadId);
 });
 
-// INI YANG PALING PENTING DAN BIKIN ERROR TADI:
 module.exports = connection;

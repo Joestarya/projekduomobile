@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:sensors_plus/sensors_plus.dart';
 import '../../../service/api_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'price_alert/price_alert_screen.dart';
+import 'price_alert/price_alert_page.dart';
 import '../../../../models/asset_item.dart';
 import 'portfolio_card.dart';
 import 'asset_tile.dart';
@@ -88,6 +88,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   _TimezoneOption _selectedTimezone = _timezones[0];
   String _clockDisplay = '';
   String _dateDisplay = '';
+  
+  // Rate Cache
+  double? _cachedIdrRate;
+  double? _cachedEurRate;
 
   // Sparkline data cache per symbol
   final Map<String, List<double>> _sparklineCache = {};
@@ -103,13 +107,12 @@ class _DashboardScreenState extends State<DashboardScreen>
   late AnimationController _pulseController;
   late AnimationController _cardSlideController;
   late Animation<double> _cardSlideAnimation;
-  final Map<String, Color?> _flashColors = {};
-  final Map<String, Timer?> _flashTimers = {};
 
   // ─────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
+    _loadCachedRates();
 
     _pulseController = AnimationController(
       vsync: this,
@@ -143,6 +146,22 @@ class _DashboardScreenState extends State<DashboardScreen>
     Future.delayed(const Duration(milliseconds: 200), () {
       _cardSlideController.forward();
     });
+  }
+
+  Future<void> _loadCachedRates() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _cachedIdrRate = prefs.getDouble('cached_idr_rate');
+        _cachedEurRate = prefs.getDouble('cached_eur_rate');
+      });
+    }
+  }
+
+  Future<void> _saveCachedRates(double idr, double eur) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('cached_idr_rate', idr);
+    await prefs.setDouble('cached_eur_rate', eur);
   }
 
   // ─────────────────────────────────────────────
@@ -197,11 +216,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       _fetchSparkline(sym);
     }
   }
-
+  //data chart binance 24h
   Future<void> _fetchSparkline(String symbol) async {
-    // Coba dari backend dulu, fallback ke Binance langsung
     try {
-      // Coba endpoint backend custom
       final backendUrl = ApiConfig.endpoint(
         '/crypto/klines?symbol=$symbol&interval=1h&limit=24',
       );
@@ -225,7 +242,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     // Fallback: langsung ke Binance public API
     try {
       final binanceUrl =
-          'https://data-api.binance.vision/api/v3/klines?symbol=$symbol&interval=1h&limit=24';
+          'https://data-api.binance.vision/api/v3/klines?symbol=$symbol&interval=1h&limit=1h';
       final resp = await http
           .get(Uri.parse(binanceUrl))
           .timeout(const Duration(seconds: 6));
@@ -293,17 +310,17 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  double _getIdrRate() {
+  double? _getIdrRate() {
     final idrAsset = _assets.where((a) => a.symbol == 'USDT_IDR').firstOrNull;
-    return idrAsset?.priceUsd ?? 17333.0;
+    return idrAsset?.priceUsd ?? _cachedIdrRate;
   }
 
-  double _getEurRate() {
+  double? _getEurRate() {
     final eurAsset = _assets.where((a) => a.symbol == 'EUR').firstOrNull;
     if (eurAsset != null && eurAsset.priceUsd > 0) {
       return 1 / eurAsset.priceUsd;
     }
-    return 0.92;
+    return _cachedEurRate;
   }
 
   void _calculateTotalBalance() {
@@ -318,9 +335,15 @@ class _DashboardScreenState extends State<DashboardScreen>
           asset == 'BUSD') {
         total += amount;
       } else if (asset == 'IDR' || asset == 'BIDR' || asset == 'IDRT') {
-        total += amount / _getIdrRate();
+        final rate = _getIdrRate();
+        if (rate != null && rate > 0) {
+          total += amount / rate;
+        }
       } else if (asset == 'EUR') {
-        total += amount / _getEurRate();
+        final rate = _getEurRate();
+        if (rate != null && rate > 0) {
+          total += amount / rate;
+        }
       } else {
         final assetItem = _assets.where((a) => a.symbol == asset).firstOrNull;
         if (assetItem != null) {
@@ -397,10 +420,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           sparkline: sparkline,
         );
         nextAssets.add(item);
-
-        if (prev != null && prev != price.toDouble()) {
-          _triggerFlash(symbol, price.toDouble() > prev);
-        }
       }
 
       if (!mounted) return;
@@ -409,6 +428,18 @@ class _DashboardScreenState extends State<DashboardScreen>
         _lastUpdatedAt = updatedAt;
         _priceError = null;
         _isLoadingPrices = false;
+        
+        // Update cache rates with latest from Binance
+        final newIdrRate = _getIdrRate();
+        final newEurRate = _getEurRate();
+        if (newIdrRate != null && newEurRate != null) {
+          if (newIdrRate != _cachedIdrRate || newEurRate != _cachedEurRate) {
+            _cachedIdrRate = newIdrRate;
+            _cachedEurRate = newEurRate;
+            _saveCachedRates(newIdrRate, newEurRate);
+          }
+        }
+
         _calculateTotalBalance();
       });
     } on TimeoutException {
@@ -430,16 +461,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         _requestPriceFetch(showLoader: false);
       }
     }
-  }
-
-  void _triggerFlash(String symbol, bool isUp) {
-    _flashTimers[symbol]?.cancel();
-    setState(
-      () => _flashColors[symbol] = isUp ? Colors.greenAccent : Colors.redAccent,
-    );
-    _flashTimers[symbol] = Timer(const Duration(milliseconds: 600), () {
-      if (mounted) setState(() => _flashColors[symbol] = null);
-    });
   }
 
   // ─────────────────────────────────────────────
@@ -476,9 +497,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     _chartRefreshTimer?.cancel();
     _clockTimer?.cancel();
     _accelerometerSubscription?.cancel();
-    for (final t in _flashTimers.values) {
-      t?.cancel();
-    }
     super.dispose();
   }
 
@@ -834,7 +852,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       );
     }
 
-    final displayAssets = _assets.where((a) => a.symbol != 'USDT_IDR' && a.symbol != 'EUR').toList();
+    final displayAssets = _assets
+        .where((a) => a.symbol != 'USDT_IDR' && a.symbol != 'EUR')
+        .toList();
     return ListView.builder(
       padding: const EdgeInsets.only(top: 4, bottom: 16),
       itemCount: displayAssets.length,
@@ -856,14 +876,15 @@ class _DashboardScreenState extends State<DashboardScreen>
           },
           child: AssetTile(
             asset: displayAssets[index],
-            flashColor: _flashColors[displayAssets[index].symbol],
             sparkData: _sparklineCache[displayAssets[index].pair],
             userBalance: _userBalances[displayAssets[index].symbol] ?? 0.0,
             priceDisplay: _currencyMode == 'IDR'
-                ? _formatIdr(displayAssets[index].priceUsd * _getIdrRate())
+                ? (_getIdrRate() != null ? _formatIdr(displayAssets[index].priceUsd * _getIdrRate()!) : '...')
                 : (_currencyMode == 'EUR'
-                    ? _formatEur(displayAssets[index].priceUsd * _getEurRate())
-                    : _formatUsd(displayAssets[index].priceUsd)),
+                      ? (_getEurRate() != null ? _formatEur(
+                          displayAssets[index].priceUsd * _getEurRate()!,
+                        ) : '...')
+                      : _formatUsd(displayAssets[index].priceUsd)),
             changePercentDisplay: _formatChangePercent(
               displayAssets[index].changePercent,
             ),

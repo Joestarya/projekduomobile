@@ -6,8 +6,8 @@ class PortfolioCard extends StatelessWidget {
   final bool isPortfolioConnected;
   final String currencyMode;
   final double totalBalance;
-  final double idrRate;
-  final double eurRate;
+  final double? idrRate;
+  final double? eurRate;
   final Map<String, double> userBalances;
   final List<AssetItem> assets;
   final VoidCallback onTogglePrivacy;
@@ -36,7 +36,7 @@ class PortfolioCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardTheme.color ?? const Color(0xFF131929),
+        color: const Color.fromARGB(255, 5, 20, 60),//warna portofolio
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -53,7 +53,7 @@ class PortfolioCard extends StatelessWidget {
                 onTap: onTogglePrivacy,
                 child: Icon(
                   isPrivacyMode ? Icons.visibility_off : Icons.visibility,
-                  color: const Color(0xFF8B9BB4),
+                  color: const Color(0xFF8B9BB4),//W
                   size: 18,
                 ),
               ),
@@ -66,9 +66,9 @@ class PortfolioCard extends StatelessWidget {
                 : (!isPortfolioConnected
                       ? 'Data tidak tersedia'
                       : (currencyMode == 'IDR'
-                            ? formatIdr(totalBalance * idrRate)
+                            ? (idrRate != null ? formatIdr(totalBalance * idrRate!) : 'Menghitung...')
                             : (currencyMode == 'EUR'
-                                ? formatEur(totalBalance * eurRate)
+                                ? (eurRate != null ? formatEur(totalBalance * eurRate!) : 'Menghitung...')
                                 : formatUsd(totalBalance)))),
             style: const TextStyle(
               color: Colors.white,

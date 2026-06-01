@@ -1,41 +1,45 @@
 import 'package:flutter/material.dart';
 
 import '../../../../theme/app_theme.dart';
+import 'models.dart';
 import 'price_alert_controller.dart';
 
-class PriceAlertView extends StatefulWidget {
-  final PriceAlertController controller;
+class PriceAlertScreen extends StatefulWidget {
+  final Map<String, double> livePrices;
 
-  const PriceAlertView({super.key, required this.controller});
+  const PriceAlertScreen({super.key, required this.livePrices});
 
   @override
-  State<PriceAlertView> createState() => _PriceAlertViewState();
+  State<PriceAlertScreen> createState() => _PriceAlertScreenState();
 }
 
-class _PriceAlertViewState extends State<PriceAlertView> {
+class _PriceAlertScreenState extends State<PriceAlertScreen> {
+  late final PriceAlertController _controller;
   late final TextEditingController _percentController;
-
-  PriceAlertController get controller => widget.controller;
 
   @override
   void initState() {
     super.initState();
-    _percentController = TextEditingController(text: controller.percentText);
-    controller.addListener(_syncInput);
+    _controller = PriceAlertController(widget.livePrices)..init();
+    _percentController = TextEditingController(text: _controller.percentText);
+    _controller.addListener(_syncInput);
   }
 
   @override
   void dispose() {
-    controller.removeListener(_syncInput);
+    _controller.removeListener(_syncInput);
     _percentController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
   void _syncInput() {
-    if (_percentController.text == controller.percentText) return;
+    if (_percentController.text == _controller.percentText) return;
     _percentController.value = _percentController.value.copyWith(
-      text: controller.percentText,
-      selection: TextSelection.collapsed(offset: controller.percentText.length),
+      text: _controller.percentText,
+      selection: TextSelection.collapsed(
+        offset: _controller.percentText.length,
+      ),
       composing: TextRange.empty,
     );
   }
@@ -51,7 +55,7 @@ class _PriceAlertViewState extends State<PriceAlertView> {
   }
 
   Future<void> _submit() async {
-    final error = await controller.createAlert();
+    final error = await _controller.createAlert();
     if (!mounted) return;
     if (error == null) {
       _showMessage('Alert berhasil dibuat');
@@ -61,7 +65,7 @@ class _PriceAlertViewState extends State<PriceAlertView> {
   }
 
   Future<void> _delete(int id) async {
-    final error = await controller.deleteAlert(id);
+    final error = await _controller.deleteAlert(id);
     if (!mounted) return;
     if (error == null) {
       _showMessage('Alert dihapus');
@@ -73,7 +77,7 @@ class _PriceAlertViewState extends State<PriceAlertView> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: controller,
+      animation: _controller,
       builder: (context, _) {
         return Scaffold(
           backgroundColor: AppTheme.bg,
@@ -83,11 +87,11 @@ class _PriceAlertViewState extends State<PriceAlertView> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.refresh),
-                onPressed: controller.fetchAlerts,
+                onPressed: _controller.fetchAlerts,
               ),
             ],
           ),
-          body: controller.isLoading
+          body: _controller.isLoading
               ? const Center(child: CircularProgressIndicator())
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
@@ -97,7 +101,7 @@ class _PriceAlertViewState extends State<PriceAlertView> {
                       _buildForm(),
                       const SizedBox(height: 24),
                       Text(
-                        'Alert Aktif (${controller.alerts.length})',
+                        'Alert Aktif (${_controller.alerts.length})',
                         style: const TextStyle(
                           color: AppTheme.textPrimary,
                           fontWeight: FontWeight.w600,
@@ -105,7 +109,7 @@ class _PriceAlertViewState extends State<PriceAlertView> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      if (controller.alerts.isEmpty)
+                      if (_controller.alerts.isEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 28),
                           child: Center(
@@ -116,7 +120,7 @@ class _PriceAlertViewState extends State<PriceAlertView> {
                           ),
                         )
                       else
-                        ...controller.alerts.map(_buildAlertTile),
+                        ..._controller.alerts.map(_buildAlertTile),
                     ],
                   ),
                 ),
@@ -138,7 +142,7 @@ class _PriceAlertViewState extends State<PriceAlertView> {
           _buildFieldLabel('Coin'),
           const SizedBox(height: 6),
           DropdownButton<int>(
-            value: controller.selectedCoinIndex,
+            value: _controller.selectedCoinIndex,
             dropdownColor: AppTheme.surfaceHigh,
             underline: const SizedBox.shrink(),
             items: List.generate(PriceAlertController.coins.length, (index) {
@@ -148,7 +152,7 @@ class _PriceAlertViewState extends State<PriceAlertView> {
                 child: Text('${coin.emoji} ${coin.symbol}'),
               );
             }),
-            onChanged: (value) => controller.selectCoin(value ?? 0),
+            onChanged: (value) => _controller.selectCoin(value ?? 0),
           ),
           const SizedBox(height: 12),
           _buildFieldLabel('Arah'),
@@ -158,9 +162,9 @@ class _PriceAlertViewState extends State<PriceAlertView> {
               ButtonSegment<String>(value: 'up', label: Text('Naik')),
               ButtonSegment<String>(value: 'down', label: Text('Turun')),
             ],
-            selected: <String>{controller.direction},
+            selected: <String>{_controller.direction},
             onSelectionChanged: (selection) =>
-                controller.setDirection(selection.first),
+                _controller.setDirection(selection.first),
           ),
           const SizedBox(height: 12),
           _buildFieldLabel('Persenan (%)'),
@@ -168,7 +172,7 @@ class _PriceAlertViewState extends State<PriceAlertView> {
           TextField(
             controller: _percentController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: controller.setPercentText,
+            onChanged: _controller.setPercentText,
             decoration: InputDecoration(
               hintText: 'Masukkan %',
               suffixText: '%',
@@ -193,8 +197,8 @@ class _PriceAlertViewState extends State<PriceAlertView> {
                 disabledBackgroundColor: AppTheme.textDim,
                 padding: const EdgeInsets.symmetric(vertical: 11),
               ),
-              onPressed: controller.canSubmit ? _submit : null,
-              child: controller.isSubmitting
+              onPressed: _controller.canSubmit ? _submit : null,
+              child: _controller.isSubmitting
                   ? const SizedBox(
                       height: 16,
                       width: 16,
@@ -220,7 +224,7 @@ class _PriceAlertViewState extends State<PriceAlertView> {
         children: [
           Expanded(
             child: Text(
-              '${alert.coinSymbol} ${alert.direction == 'up' ? '↑' : '↓'} \$${controller.formatPrice(alert.targetPrice)}',
+              '${alert.coinSymbol} ${alert.direction == 'up' ? '↑' : '↓'} \$${_controller.formatPrice(alert.targetPrice)}',
               style: const TextStyle(
                 color: AppTheme.textPrimary,
                 fontWeight: FontWeight.w600,

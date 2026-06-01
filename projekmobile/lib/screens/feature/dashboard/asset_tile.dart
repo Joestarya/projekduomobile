@@ -4,7 +4,6 @@ import 'chart.dart';
 
 class AssetTile extends StatelessWidget {
   final AssetItem asset;
-  final Color? flashColor;
   final List<double>? sparkData;
   final double userBalance;
   final String priceDisplay;
@@ -14,7 +13,6 @@ class AssetTile extends StatelessWidget {
   const AssetTile({
     super.key,
     required this.asset,
-    required this.flashColor,
     required this.sparkData,
     required this.userBalance,
     required this.priceDisplay,
@@ -25,11 +23,7 @@ class AssetTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUp = asset.changePercent >= 0;
-    final priceColor = flashColor != null
-        ? (flashColor == Colors.greenAccent
-              ? const Color(0xFF00E676)
-              : const Color(0xFFFF5252))
-        : (isUp ? const Color(0xFF00E676) : const Color(0xFFFF5252));
+    final priceColor = isUp ? const Color(0xFF00E676) : const Color(0xFFFF5252);
 
     final hasChart = sparkData != null && sparkData!.length > 2;
 
@@ -38,9 +32,7 @@ class AssetTile extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         decoration: BoxDecoration(
-          color: flashColor != null
-              ? flashColor!.withOpacity(0.04)
-              : Colors.transparent,
+          color: Colors.transparent,
           border: Border(
             bottom: BorderSide(
               color: Theme.of(context).dividerTheme.color ?? Colors.transparent,
@@ -152,7 +144,7 @@ class AssetTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: isUp
-                            ? const Color(0xFF00E676)
+                            ? const Color(0xFF00E676)//warnapercent
                             : const Color(0xFFFF5252),
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
