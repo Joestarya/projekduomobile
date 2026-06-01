@@ -4,6 +4,9 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : '';
+const GEMINI_MODEL = process.env.GEMINI_MODEL
+    ? process.env.GEMINI_MODEL.trim()
+    : 'gemini-flash-latest';
 
 console.log('Key Terbaca:', GEMINI_API_KEY ? 'Ya' : 'Tidak');
 if (GEMINI_API_KEY) {
@@ -34,6 +37,7 @@ if (!SECRET_KEY) {
 
 module.exports = {
     GEMINI_API_KEY,
+    GEMINI_MODEL,
     genAI,
     BINANCE_BASE_URLS,
     SECRET_KEY,
