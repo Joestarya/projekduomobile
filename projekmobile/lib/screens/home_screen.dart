@@ -3,6 +3,7 @@ import 'feature/dashboard/dashboard_screen.dart';
 import 'feature/map/map_screen.dart';
 import 'feature/user/profile_screen.dart';
 import 'feature/game/gamescreen.dart';
+import 'feature/chatbot/chatbot_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,6 +35,16 @@ class _HomeScreenState extends State<HomeScreen> {
       // IndexedStack: semua screen tetap mount di background.
       // GameScreen timer tidak akan cancel saat user pindah tab.
       body: IndexedStack(index: _selectedIndex, children: _widgetOptions),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ChatbotScreen()),
+          );
+        },
+        backgroundColor: Colors.blueAccent,
+        child: const Icon(Icons.chat, color: Colors.white),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         backgroundColor: const Color(0xFF0C0F1A), // Warna background bottom navbar
