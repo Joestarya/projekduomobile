@@ -91,6 +91,7 @@ class _AtmFinderScreenState extends State<AtmFinderScreen>
     _locationSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 15),
     ).listen((pos) async {
+      if (!pos.latitude.isFinite || !pos.longitude.isFinite) return;
       final newLoc = LatLng(pos.latitude, pos.longitude);
       if (mounted) setState(() => _myLocation = newLoc);
 

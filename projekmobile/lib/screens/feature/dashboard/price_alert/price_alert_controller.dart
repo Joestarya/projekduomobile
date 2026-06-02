@@ -33,19 +33,27 @@ class PriceAlertController extends ChangeNotifier {
   String get selectedSymbol => coins[selectedCoinIndex].symbol;
   double? get selectedLivePrice => livePrices[selectedSymbol];
 
-  double? get percentValue {
-    final value = double.tryParse(percentText.trim().replaceAll(',', '.'));
-    if (value == null || value <= 0) return null;
-    return value;
+  bool isPercentageMode = true;
+
+  void setMode(bool isPercent) {
+    if (isPercent == isPercentageMode) return;
+    isPercentageMode = isPercent;
+    notifyListeners();
   }
 
   double? get targetPrice {
+    final value = double.tryParse(percentText.trim().replaceAll(',', '.'));
+    if (value == null || value <= 0) return null;
+
+    if (!isPercentageMode) {
+      return value;
+    }
+
     final price = selectedLivePrice;
-    final percent = percentValue;
-    if (price == null || price == 0 || percent == null) return null;
+    if (price == null || price == 0) return null;
     return direction == 'up'
-        ? price * (1 + (percent / 100))
-        : price * (1 - (percent / 100));
+        ? price * (1 + (value / 100))
+        : price * (1 - (value / 100));
   }
 
   bool get canSubmit => targetPrice != null && !isSubmitting;
@@ -110,13 +118,14 @@ class PriceAlertController extends ChangeNotifier {
   }
 
   String formatPrice(double value) {
-    return value >= 10 ? value.toStringAsFixed(2) : value.toStringAsFixed(4);
+    final fixed = value.toStringAsFixed(8);
+    return fixed.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
   }
 
   Future<String?> createAlert() async {
     final price = targetPrice;
     if (userId == null) return 'User belum login';
-    if (price == null) return 'Masukkan % custom yang valid';
+    if (price == null) return isPercentageMode ? 'Masukkan % custom yang valid' : 'Masukkan harga custom yang valid';
 
     isSubmitting = true;
     notifyListeners();

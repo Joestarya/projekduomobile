@@ -35,16 +35,18 @@ class _HomeScreenState extends State<HomeScreen> {
       // IndexedStack: semua screen tetap mount di background.
       // GameScreen timer tidak akan cancel saat user pindah tab.
       body: IndexedStack(index: _selectedIndex, children: _widgetOptions),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const ChatbotScreen()),
-          );
-        },
-        backgroundColor: Colors.blueAccent,
-        child: const Icon(Icons.chat, color: Colors.white),
-      ),
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ChatbotScreen()),
+                );
+              },
+              backgroundColor: Colors.blueAccent,
+              child: const Icon(Icons.chat, color: Colors.white),
+            )
+          : null,
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         backgroundColor: const Color(0xFF0C0F1A), // Warna background bottom navbar

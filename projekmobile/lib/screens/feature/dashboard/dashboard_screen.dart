@@ -78,7 +78,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   String _currencyMode = 'IDR';
   double _totalBalance = 0.0;
   Map<String, double> _userBalances = {};
-  bool _isPortfolioConnected = false;
+  String? _portfolioErrorMessage = 'Portofolio belum tersambung';
   bool _isLoadingPrices = true;
   bool _isFetchingPrices = false;
   bool _hasPendingPriceFetch = false;
@@ -289,22 +289,31 @@ class _DashboardScreenState extends State<DashboardScreen>
 
         if (mounted) {
           setState(() {
-            _isPortfolioConnected = true;
+            _portfolioErrorMessage = null;
             _userBalances = newBalances;
             _calculateTotalBalance();
+          });
+        }
+      } else if (response.statusCode == 400 && response.body.contains('belum melakukan scan')) {
+        if (mounted) {
+          setState(() {
+            _portfolioErrorMessage = 'Portofolio belum tersambung';
+            _userBalances.clear();
           });
         }
       } else {
         if (mounted) {
           setState(() {
-            _isPortfolioConnected = false;
+            _portfolioErrorMessage = 'Gagal mendapatkan data';
+            _userBalances.clear();
           });
         }
       }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _isPortfolioConnected = false;
+          _portfolioErrorMessage = 'Gagal mendapatkan data';
+          _userBalances.clear();
         });
       }
     }
@@ -564,7 +573,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   child: PortfolioCard(
                     isPrivacyMode: _isPrivacyMode,
-                    isPortfolioConnected: _isPortfolioConnected,
+                    portfolioErrorMessage: _portfolioErrorMessage,
                     currencyMode: _currencyMode,
                     totalBalance: _totalBalance,
                     idrRate: _getIdrRate(),
@@ -618,6 +627,15 @@ class _DashboardScreenState extends State<DashboardScreen>
         ),
         actions: [
           _buildClockWidget(isCompact: isCompact),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            tooltip: 'Refresh Data',
+            onPressed: () {
+              _requestPriceFetch(showLoader: true);
+              _fetchPortfolio();
+              _fetchAllSparklines();
+            },
+          ),
           IconButton(
             icon: const Icon(
               Icons.notifications_active_rounded,
@@ -1126,8 +1144,42 @@ class _OrderBottomSheetState extends State<_OrderBottomSheet> {
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
-              suffixText: isBuy ? 'USDT' : widget.asset.symbol,
-              suffixStyle: const TextStyle(color: Colors.white),
+              suffixIcon: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (!isBuy)
+                      InkWell(
+                        onTap: () {
+                          _amountController.text = _formatAssetBalance(widget.userBalance);
+                        },
+                        borderRadius: BorderRadius.circular(4),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6C63FF).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'MAX',
+                            style: TextStyle(
+                              color: Color(0xFF9D97FF),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    Text(
+                      isBuy ? 'USDT' : widget.asset.symbol,
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
           if (_errorMessage != null) ...[

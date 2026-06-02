@@ -6,7 +6,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL
     ? process.env.GEMINI_MODEL.trim()
-    : 'gemini-flash-latest';
+    : 'gemini-2.5-flash';
 
 console.log('Key Terbaca:', GEMINI_API_KEY ? 'Ya' : 'Tidak');
 if (GEMINI_API_KEY) {

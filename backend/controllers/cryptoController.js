@@ -1,4 +1,4 @@
-const { GEMINI_API_KEY, genAI } = require('../config');
+const { GEMINI_API_KEY, GEMINI_MODEL, genAI } = require('../config');
 const { decryptQRData } = require('../utils/crypto');
 const {
     priceCache,
@@ -104,7 +104,17 @@ const createOrder = async (req, res) => {
         }
 
         let orderPath = `/order?symbol=${symbol.toUpperCase()}&side=${side.toUpperCase()}&type=${type.toUpperCase()}`;
-        if (quantity) orderPath += `&quantity=${quantity}`;
+        if (quantity) {
+            let parsedQty = parseFloat(quantity);
+            const sym = symbol.toUpperCase();
+            if (sym === 'BTCUSDT') parsedQty = Math.floor(parsedQty * 100000) / 100000;
+            else if (sym === 'ETHUSDT') parsedQty = Math.floor(parsedQty * 10000) / 10000;
+            else if (sym === 'BNBUSDT') parsedQty = Math.floor(parsedQty * 1000) / 1000;
+            else if (sym === 'SOLUSDT') parsedQty = Math.floor(parsedQty * 100) / 100;
+            else parsedQty = Math.floor(parsedQty * 100) / 100;
+            
+            orderPath += `&quantity=${parsedQty}`;
+        }
         if (quoteOrderQty) orderPath += `&quoteOrderQty=${quoteOrderQty}`;
 
         const orderResponse = await fetchBinanceAuth(orderPath, apiKey, secretKey, 'POST');
@@ -185,12 +195,7 @@ Respond ONLY in this exact JSON format (no markdown, no extra text):
 {"direction":"UP","confidence":"MEDIUM","reasoning":"Momentum positif dengan volume meningkat. Harga berpotensi melanjutkan kenaikan jangka pendek."}`;
 
         const geminiModel = genAI.getGenerativeModel({
-            model: 'gemini-flash-latest',
-            generationConfig: {
-                temperature: 0.3,
-                maxOutputTokens: 1000,
-                responseMimeType: 'application/json',
-            },
+            model: GEMINI_MODEL,
         });
 
         const geminiResp = await geminiModel.generateContent(prompt);

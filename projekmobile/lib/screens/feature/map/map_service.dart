@@ -26,6 +26,7 @@ class MapService {
       final pos = await Geolocator.getCurrentPosition(
         timeLimit: const Duration(seconds: 10),
       );
+      if (!pos.latitude.isFinite || !pos.longitude.isFinite) return null;
       return LatLng(pos.latitude, pos.longitude);
     } catch (_) {
       return null;
@@ -75,7 +76,7 @@ out center tags;
             ? (el['center']?['lon'] as num?)?.toDouble()
             : (el['lon'] as num?)?.toDouble();
 
-        if (elLat == null || elLon == null) continue;
+        if (elLat == null || elLon == null || !elLat.isFinite || !elLon.isFinite) continue;
 
         // Deduplikasi berdasarkan posisi (hindari ATM + bank overlap)
         final key = '${elLat.toStringAsFixed(6)},${elLon.toStringAsFixed(6)}';

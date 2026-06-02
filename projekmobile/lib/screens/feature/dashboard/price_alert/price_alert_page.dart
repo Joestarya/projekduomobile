@@ -167,15 +167,27 @@ class _PriceAlertScreenState extends State<PriceAlertScreen> {
                 _controller.setDirection(selection.first),
           ),
           const SizedBox(height: 12),
-          _buildFieldLabel('Persenan (%)'),
+          _buildFieldLabel('Mode Alert'),
+          const SizedBox(height: 6),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment<bool>(value: true, label: Text('Persentase (%)')),
+              ButtonSegment<bool>(value: false, label: Text('Harga (\$)')),
+            ],
+            selected: <bool>{_controller.isPercentageMode},
+            onSelectionChanged: (selection) =>
+                _controller.setMode(selection.first),
+          ),
+          const SizedBox(height: 12),
+          _buildFieldLabel(_controller.isPercentageMode ? 'Persentase (%)' : 'Harga Target (\$)'),
           const SizedBox(height: 6),
           TextField(
             controller: _percentController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: _controller.setPercentText,
             decoration: InputDecoration(
-              hintText: 'Masukkan %',
-              suffixText: '%',
+              hintText: _controller.isPercentageMode ? 'Masukkan %' : 'Masukkan Harga \$',
+              suffixText: _controller.isPercentageMode ? '%' : '\$',
               filled: true,
               fillColor: AppTheme.surfaceHigh,
               border: OutlineInputBorder(

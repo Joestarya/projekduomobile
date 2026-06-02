@@ -3,7 +3,7 @@ import '../../../models/asset_item.dart';
 
 class PortfolioCard extends StatelessWidget {
   final bool isPrivacyMode;
-  final bool isPortfolioConnected;
+  final String? portfolioErrorMessage;
   final String currencyMode;
   final double totalBalance;
   final double? idrRate;
@@ -18,7 +18,7 @@ class PortfolioCard extends StatelessWidget {
   const PortfolioCard({
     super.key,
     required this.isPrivacyMode,
-    required this.isPortfolioConnected,
+    this.portfolioErrorMessage,
     required this.currencyMode,
     required this.totalBalance,
     required this.idrRate,
@@ -63,17 +63,17 @@ class PortfolioCard extends StatelessWidget {
           Text(
             isPrivacyMode
                 ? '•••••••••'
-                : (!isPortfolioConnected
-                      ? 'Data tidak tersedia'
+                : (portfolioErrorMessage != null
+                      ? portfolioErrorMessage!
                       : (currencyMode == 'IDR'
                             ? (idrRate != null ? formatIdr(totalBalance * idrRate!) : 'Menghitung...')
                             : (currencyMode == 'EUR'
                                 ? (eurRate != null ? formatEur(totalBalance * eurRate!) : 'Menghitung...')
                                 : formatUsd(totalBalance)))),
-            style: const TextStyle(
-              color: Colors.white, // Warna teks saldo portofolio
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
+            style: TextStyle(
+              color: portfolioErrorMessage != null && !isPrivacyMode ? Colors.white70 : Colors.white, // Warna teks saldo portofolio
+              fontSize: portfolioErrorMessage != null && !isPrivacyMode ? 14 : 28,
+              fontWeight: portfolioErrorMessage != null && !isPrivacyMode ? FontWeight.w500 : FontWeight.w800,
             ),
           ),
           const SizedBox(height: 12),

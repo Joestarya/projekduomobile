@@ -65,19 +65,6 @@ async function fetchBinanceAuth(path, apiKey, secretKey, method = 'GET') {
         }
     }
 
-    if (path.includes('/account')) {
-        console.warn(`[fetchBinanceAuth] Semua endpoint gagal karena blokir ISP. Menggunakan data MOCK.`);
-        return {
-            balances: [
-                { asset: 'BTC',  free: '0.015', locked: '0' },
-                { asset: 'ETH',  free: '1.25',  locked: '0' },
-                { asset: 'BNB',  free: '10.5',  locked: '0' },
-                { asset: 'SOL',  free: '25.0',  locked: '0' },
-                { asset: 'USDT', free: '150.0', locked: '0' },
-            ],
-        };
-    }
-
     throw new Error(`Semua endpoint Binance gagal. ${lastError || ''}`.trim());
 }
 
@@ -90,19 +77,17 @@ async function refreshPriceCache() {
         { symbol: 'ETHUSDT', name: 'Ethereum', short: 'ETH' },
         { symbol: 'BNBUSDT', name: 'BNB',      short: 'BNB' },
         { symbol: 'SOLUSDT', name: 'Solana',   short: 'SOL' },
-        { symbol: 'USDTIDRT', name: 'Rupiah Token', short: 'USDT_IDR' },
-        { symbol: 'EURUSDT', name: 'Euro', short: 'EUR' },
     ];
 
     try {
-        //timeframe
-        const [tickerData] = await Promise.all([
+        const [tickerData, forexResponse] = await Promise.all([
             fetchBinance(`/ticker/24hr?symbols=${JSON.stringify(ASSETS.map((a) => a.symbol))}`),
+            fetch('https://open.er-api.com/v6/latest/USD').then(res => res.json()).catch(() => null)
         ]);
 
         const parsed = Array.isArray(tickerData) ? tickerData : [tickerData];
 
-        priceCache.data = parsed
+        const newData = parsed
             .map((t) => {
                 const meta = ASSETS.find((a) => a.symbol === t.symbol);
                 if (!meta) return null;
@@ -119,6 +104,35 @@ async function refreshPriceCache() {
             })
             .filter(Boolean);
 
+        if (forexResponse && forexResponse.rates) {
+            if (forexResponse.rates.IDR) {
+                newData.push({
+                    name: 'Indonesian Rupiah',
+                    symbol: 'USDT_IDR',
+                    pair: 'USDIDR',
+                    price: forexResponse.rates.IDR,
+                    changePercent: 0,
+                    high24h: forexResponse.rates.IDR,
+                    low24h: forexResponse.rates.IDR,
+                    volume24h: 0,
+                });
+            }
+            if (forexResponse.rates.EUR) {
+                const eurPriceUsd = 1 / forexResponse.rates.EUR;
+                newData.push({
+                    name: 'Euro',
+                    symbol: 'EUR',
+                    pair: 'USDEUR',
+                    price: eurPriceUsd,
+                    changePercent: 0,
+                    high24h: eurPriceUsd,
+                    low24h: eurPriceUsd,
+                    volume24h: 0,
+                });
+            }
+        }
+
+        priceCache.data = newData;
         priceCache.updatedAt = new Date().toISOString();
     } catch (err) {
         console.error('[PriceCache] Gagal refresh:', err.message);
