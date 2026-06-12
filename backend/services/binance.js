@@ -73,10 +73,10 @@ async function refreshPriceCache() {
     priceCache.isFetching = true;
 
     const ASSETS = [
-        { symbol: 'BTCUSDT', name: 'Bitcoin',  short: 'BTC' },
+        { symbol: 'BTCUSDT', name: 'Bitcoin', short: 'BTC' },
         { symbol: 'ETHUSDT', name: 'Ethereum', short: 'ETH' },
-        { symbol: 'BNBUSDT', name: 'BNB',      short: 'BNB' },
-        { symbol: 'SOLUSDT', name: 'Solana',   short: 'SOL' },
+        { symbol: 'BNBUSDT', name: 'BNB', short: 'BNB' },
+        { symbol: 'SOLUSDT', name: 'Solana', short: 'SOL' },
     ];
 
     try {
@@ -94,7 +94,7 @@ async function refreshPriceCache() {
                 return {
                     name: meta.name,
                     symbol: meta.short,
-                    pair: t.symbol, 
+                    pair: t.symbol,
                     price: parseFloat(t.lastPrice),
                     changePercent: parseFloat(t.priceChangePercent),
                     high24h: parseFloat(t.highPrice),
@@ -162,11 +162,11 @@ async function refreshKlineCache(symbol, interval = '1h', limit = 24) {
 
         const klines = data.map((k) => ({
             openTime: k[0],
-            open:     parseFloat(k[1]),
-            high:     parseFloat(k[2]),
-            low:      parseFloat(k[3]),
-            close:    parseFloat(k[4]),
-            volume:   parseFloat(k[5]),
+            open: parseFloat(k[1]),
+            high: parseFloat(k[2]),
+            low: parseFloat(k[3]),
+            close: parseFloat(k[4]),
+            volume: parseFloat(k[5]),
         }));
 
         klineCache[cacheKey] = klines;
@@ -181,7 +181,7 @@ async function refreshKlineCache(symbol, interval = '1h', limit = 24) {
 async function warmUpKlineCache() {
     const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT'];
     for (const sym of symbols) {
-        await refreshKlineCache(sym).catch(() => {});
+        await refreshKlineCache(sym).catch(() => { });
     }
 }
 
@@ -191,7 +191,7 @@ warmUpKlineCache();
 
 setInterval(() => {
     const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT'];
-    symbols.forEach((sym) => refreshKlineCache(sym).catch(() => {}));
+    symbols.forEach((sym) => refreshKlineCache(sym).catch(() => { }));
 }, KLINE_CACHE_TTL_MS);
 
 module.exports = {

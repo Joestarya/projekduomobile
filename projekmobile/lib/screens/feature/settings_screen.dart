@@ -65,19 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         children: [
-          ListTile(
-            leading: const Icon(
-              Icons.notifications_outlined,
-              color: Color(0xFF638BFF),
-            ),
-            title: const Text('Notifikasi'),
-            onTap: () {},
-          ),
-          ListTile(
-            leading: const Icon(Icons.lock_outline, color: Color(0xFF638BFF)),
-            title: const Text('Privasi'),
-            onTap: () {},
-          ),
+         
           if (_canUseBiometric)
             SwitchListTile(
               secondary: const Icon(

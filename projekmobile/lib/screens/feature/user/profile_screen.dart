@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../settings_screen.dart';
 // import '../feature/gamescreen.dart';
 import 'qr_scanner_screen.dart';
+import 'saran_kesan_screen.dart';
 
 class ProfileMenu extends StatefulWidget {
   const ProfileMenu({super.key});
@@ -132,7 +133,14 @@ class _ProfileMenuState extends State<ProfileMenu> {
               'Beri masukan untuk mata kuliah ini',
               style: TextStyle(color: Colors.white70),
             ),
-            onTap: () {},
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SaranKesanScreen(),
+                ),
+              );
+            },
           ),
           ListTile(
             leading: const Icon(

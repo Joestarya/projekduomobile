@@ -556,7 +556,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor, //Warna Background Dashboard
       appBar: _buildAppBar(),
       body: SafeArea(
         child: Column(
@@ -995,11 +995,8 @@ class _OrderBottomSheetState extends State<_OrderBottomSheet> {
         'type': 'MARKET',
       };
 
-      if (isBuy) {
-        body['quoteOrderQty'] = _normalizeQuantity(amountText);
-      } else {
-        body['quantity'] = _normalizeQuantity(amountText);
-      }
+      // Menggunakan USDT (quoteOrderQty) untuk Buy maupun Sell
+      body['quoteOrderQty'] = _normalizeQuantity(amountText);
 
       final response = await http.post(
         Uri.parse(ApiConfig.endpoint('/crypto/order')),
@@ -1134,9 +1131,7 @@ class _OrderBottomSheetState extends State<_OrderBottomSheet> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(color: Colors.white, fontSize: 16),
             decoration: InputDecoration(
-              labelText: isBuy
-                  ? 'Jumlah USDT'
-                  : 'Jumlah ${widget.asset.symbol}',
+              labelText: 'Jumlah USDT',
               labelStyle: const TextStyle(color: Color(0xFF8B9BB4)),
               filled: true,
               fillColor: const Color(0xFF131929),
@@ -1153,7 +1148,9 @@ class _OrderBottomSheetState extends State<_OrderBottomSheet> {
                     if (!isBuy)
                       InkWell(
                         onTap: () {
-                          _amountController.text = _formatAssetBalance(widget.userBalance);
+                          // Estimasi nilai USDT dari saldo kripto yang dimiliki (dikurangi sedikit untuk amannya fluktuasi harga)
+                          final maxUsdt = widget.userBalance * widget.asset.priceUsd * 0.99; 
+                          _amountController.text = maxUsdt.toStringAsFixed(2);
                         },
                         borderRadius: BorderRadius.circular(4),
                         child: Container(
@@ -1173,9 +1170,9 @@ class _OrderBottomSheetState extends State<_OrderBottomSheet> {
                           ),
                         ),
                       ),
-                    Text(
-                      isBuy ? 'USDT' : widget.asset.symbol,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    const Text(
+                      'USDT',
+                      style: TextStyle(color: Colors.white, fontSize: 14),
                     ),
                   ],
                 ),
